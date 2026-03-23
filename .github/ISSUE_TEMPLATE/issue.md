@@ -8,8 +8,10 @@ assignees: ''
 ---
 
 # Description
+...
 
 # Technologies to be used
+...
 
 # Definition of Done
 * [ ]

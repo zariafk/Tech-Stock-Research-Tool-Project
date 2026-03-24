@@ -1,11 +1,13 @@
 """
-Uploads an in-memory DataFrame to S3 as partitioned Parquet files using awswrangler.
+Uploads a DataFrame to S3 as
+partitioned Parquet files via
+awswrangler.
 
 Expected S3 layout
 ------------------
-s3://<bucket>/<prefix>/<source>/
-    year=2024/month=03/day=24/<uuid>.parquet
-    ...
+s3://<bucket>/<category>/
+    <ticker>/year=YYYY/
+    month=MM/day=DD/<uuid>.parquet
 """
 
 import logging
@@ -14,67 +16,91 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# TODO: Update keys with table names.
+SOURCE_CATEGORY_MAP = {
+    "<rss_table>": "RSS",
+    "<alpaca_table>": "Alpaca",
+    "<reddit_table>": "Reddit",
+}
+
+PARTITION_COLS = [
+    "year",
+    "month",
+    "day",
+]
+
 
 class S3Uploader:
     """
-    Writes a DataFrame directly to S3 as partitioned Parquet files.
-
-    Parameters
-    ----------
-    bucket : Target S3 bucket name.
-    prefix : Optional key prefix, e.g. "raw/".
+    Writes a DataFrame to S3 as
+    Partitioned Parquet files.
     """
 
-    def __init__(self, bucket: str, prefix: str = "") -> None:
+    def __init__(
+        self, bucket: str
+    ) -> None:
         self.bucket = bucket
-        self.prefix = prefix.strip("/")
 
-    def upload(self, df: pd.DataFrame, source: str) -> list[str]:
+    def _build_s3_path(
+        self, source: str
+    ) -> str:
         """
-        Upload df to S3, partitioned by year/month/day derived from the 'at' column.
-
-        Parameters
-        ----------
-        df     : DataFrame with year, month, day columns already added
-                (via partition.add_time_partitions on the 'at' column).
-        source : Source name used as the S3 prefix, e.g. "alpaca_bars", "news", "reddit_posts".
-
-        Returns
-        -------
-        List of S3 URIs written.
+        Build S3 URI mapped to its
+        category (RSS/Alpaca/Reddit).
         """
-        parts = filter(None, [self.prefix, source])
-        s3_path = f"s3://{self.bucket}/{'/'.join(parts)}/"
+        mapping = SOURCE_CATEGORY_MAP
+        category = mapping.get(
+            source, source
+        )
+        base = f"s3://{self.bucket}"
+        return f"{base}/{category}/"
 
-        logger.info("Uploading %d rows from '%s' to %s",
-                    len(df), source, s3_path)
-
+    def upload(
+        self,
+        df: pd.DataFrame,
+        source: str,
+        ticker_col: str,
+    ) -> list[str]:
+        """
+        Upload df to S3, partitioned by
+        ticker then year/month/day.
+        """
+        s3_path = self._build_s3_path(
+            source
+        )
+        logger.info(
+            "Uploading %d rows from"
+            " '%s' to %s",
+            len(df), source, s3_path,
+        )
+        part_cols = [
+            ticker_col, *PARTITION_COLS
+        ]
         result = wr.s3.to_parquet(
             df=df,
             path=s3_path,
             dataset=True,
-            partition_cols=["year", "month", "day"],
+            partition_cols=part_cols,
             mode="append",
         )
-
         paths = result["paths"]
-        logger.info("Upload complete — %d file(s) written for '%s'",
-                    len(paths), source)
-
+        logger.info(
+            "Upload complete —"
+            " %d file(s) for '%s'",
+            len(paths), source,
+        )
         return paths
 
-    def list_files(self, source: str) -> list[str]:
+    def list_files(
+        self, source: str
+    ) -> list[str]:
         """
-        List all Parquet files in S3 for the given source.
-
-        Parameters
-        ----------
-        source : Source name, e.g. "alpaca_bars", "news", "reddit_posts".
-
-        Returns
-        -------
-        List of S3 URIs found under the source prefix.
+        List all Parquet files in S3
+        for the given source.
         """
-        parts = filter(None, [self.prefix, source])
-        s3_path = f"s3://{self.bucket}/{'/'.join(parts)}/"
-        return wr.s3.list_objects(s3_path)
+        s3_path = self._build_s3_path(
+            source
+        )
+        return wr.s3.list_objects(
+            s3_path
+        )

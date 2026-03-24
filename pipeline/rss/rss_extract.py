@@ -3,7 +3,6 @@
 Currently fetches news for a predefined list of tech stock tickers from Yahoo Finance RSS feeds."""
 
 from typing import Optional
-import logging
 from datetime import datetime
 import pandas as pd
 import feedparser
@@ -11,7 +10,7 @@ import requests
 from requests.exceptions import RequestException as NetworkError
 from logger import make_logger
 
-logger = make_logger(__name__)
+logger = make_logger()
 
 # List of tech stock tickers to fetch news for
 TECH_TICKERS = [

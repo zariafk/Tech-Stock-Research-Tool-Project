@@ -2,16 +2,18 @@
 
 Currently fetches news for a predefined list of tech stock tickers from Yahoo Finance RSS feeds."""
 
-
+from typing import Optional
 import logging
 from datetime import datetime
-from typing import Optional
-import requests
-import feedparser
 import pandas as pd
-from logger import make_logger
+import feedparser
 
-logger = make_logger()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%SZ",
+)
+logger = logging.getLogger(__name__)
 
 # List of tech stock tickers to fetch news for
 TECH_TICKERS = [
@@ -41,17 +43,6 @@ def fetch_rss_feed(ticker: str) -> Optional[feedparser.FeedParserDict]:
     url = YAHOO_FINANCE_RSS_URL.format(ticker=ticker)
 
     logger.info('Fetching RSS feed for %s from: %s', ticker, url)
-
-    # Use requests to fetch the feed first to handle network errors and timeouts
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Raise HTTPError for bad responses
-    except requests.exceptions.RequestException as e:
-        logger.error(
-            "Network error occurred while fetching RSS feed for %s: %s", ticker, e)
-        return None
-
-    # Parse the feed content using feedparser
     try:
         # feedparser handles HTTP requests and XML parsing internally
         feed = feedparser.parse(url)
@@ -76,7 +67,7 @@ def fetch_rss_feed(ticker: str) -> Optional[feedparser.FeedParserDict]:
                 feed.entries), ticker
         )
         return feed
-    except Exception as e:
+    except NetworkError as e:
         logger.error(
             "Exception occurred while fetching RSS feed for %s: %s", ticker, e)
         return None
@@ -236,5 +227,4 @@ def extract():
 
 
 if __name__ == "__main__":
-    df = extract()
-    print(df.head())
+    extract()

@@ -1,0 +1,7 @@
+*.venv
+
+*.tfvars
+*.tfstate
+*.tfstate.backup
+
+*.env

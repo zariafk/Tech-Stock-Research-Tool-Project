@@ -5,9 +5,12 @@ awswrangler.
 
 Expected S3 layout
 ------------------
-s3://<bucket>/<category>/
-    <ticker>/year=YYYY/
-    month=MM/day=DD/<uuid>.parquet
+s3://bucket/category/
+    <ticker_col>=TSLA/
+        year=2026/
+            month=03/
+                day=24/
+                    <uuid>.parquet
 """
 
 import logging
@@ -28,6 +31,22 @@ PARTITION_COLS = [
     "month",
     "day",
 ]
+
+
+def validate_columns(
+    df: pd.DataFrame,
+    required: list[str],
+) -> None:
+    """
+    Raise ValueError if any required
+    columns are absent from df.
+    """
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(
+                "Missing column: %s"
+                % col
+            )
 
 
 class S3Uploader:
@@ -76,6 +95,8 @@ class S3Uploader:
         part_cols = [
             ticker_col, *PARTITION_COLS
         ]
+        validate_columns(df, part_cols)
+
         result = wr.s3.to_parquet(
             df=df,
             path=s3_path,

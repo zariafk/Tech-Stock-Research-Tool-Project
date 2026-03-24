@@ -172,7 +172,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
     return df
 
 
-def extract():
+def extract(tickers: list[str] = None) -> pd.DataFrame:
     """Main extract function for extracting RSS feeds.
     Args:
         tickers: List of stock ticker symbols. Defaults to TECH_TICKERS if None.

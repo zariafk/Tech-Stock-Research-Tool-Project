@@ -7,6 +7,8 @@ import logging
 from datetime import datetime
 import pandas as pd
 import feedparser
+import requests
+from requests.exceptions import RequestException as NetworkError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,6 +45,16 @@ def fetch_rss_feed(ticker: str) -> Optional[feedparser.FeedParserDict]:
     url = YAHOO_FINANCE_RSS_URL.format(ticker=ticker)
 
     logger.info('Fetching RSS feed for %s from: %s', ticker, url)
+
+    try:
+        # Use requests to fetch the RSS feed content
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
+    except NetworkError as e:
+        logger.error(
+            "Network error occurred while fetching RSS feed for %s: %s", ticker, e)
+        return None
+
     try:
         # feedparser handles HTTP requests and XML parsing internally
         feed = feedparser.parse(url)

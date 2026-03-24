@@ -1,19 +1,20 @@
 ---
-name: Issue
-about: Describe this issue template's purpose here.
-title: "[FEATURE]"
+name: Feature request
+about: Suggest an idea for this project
+title: ''
 labels: ''
 assignees: ''
 
 ---
 
-# Overview
-What is the ticket for? High level.
+# Description
+...
 
-# Resources
--  resource to use for ...
--  resource to use for ...
+# Technologies to be used
+...
 
-# Files changed/added
-[] File changed- why
-[] File added - why
+# Definition of Done
+* [ ]
+* [ ]
+
+# Time Estimation

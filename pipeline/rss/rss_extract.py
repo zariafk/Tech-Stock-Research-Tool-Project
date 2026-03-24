@@ -9,13 +9,9 @@ import pandas as pd
 import feedparser
 import requests
 from requests.exceptions import RequestException as NetworkError
+from logger import make_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%SZ",
-)
-logger = logging.getLogger(__name__)
+logger = make_logger(__name__)
 
 # List of tech stock tickers to fetch news for
 TECH_TICKERS = [

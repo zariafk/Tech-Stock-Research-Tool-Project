@@ -35,7 +35,8 @@ class S3Uploader:
 
         Parameters
         ----------
-        df     : DataFrame with year, month, day columns already added (via partition.add_time_partitions on the 'at' column).
+        df     : DataFrame with year, month, day columns already added
+                (via partition.add_time_partitions on the 'at' column).
         source : Source name used as the S3 prefix, e.g. "alpaca_bars", "news", "reddit_posts".
 
         Returns
@@ -61,3 +62,19 @@ class S3Uploader:
                     len(paths), source)
 
         return paths
+
+    def list_files(self, source: str) -> list[str]:
+        """
+        List all Parquet files in S3 for the given source.
+
+        Parameters
+        ----------
+        source : Source name, e.g. "alpaca_bars", "news", "reddit_posts".
+
+        Returns
+        -------
+        List of S3 URIs found under the source prefix.
+        """
+        parts = filter(None, [self.prefix, source])
+        s3_path = f"s3://{self.bucket}/{'/'.join(parts)}/"
+        return wr.s3.list_objects(s3_path)

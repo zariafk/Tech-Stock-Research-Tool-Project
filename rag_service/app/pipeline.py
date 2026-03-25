@@ -6,6 +6,7 @@ from app.query import build_context, generate_answer
 
 
 def run_rag_pipeline(user_query, ticker=None, data_path=None, data=None):
+    """Run the full RAG pipeline: ingest, embed, store, retrieve, and generate answer."""
     data = get_input_data(data_path=data_path, data=data)
 
     docs = convert_to_documents(data)

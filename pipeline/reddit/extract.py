@@ -107,9 +107,11 @@ class RedditExtractor:
                 return comments
 
             elif response.status_code == 429:
-                wait = int(response.headers.get("Retry-After", 2))
+                wait = int(response.headers.get(
+                    "Retry-After", 5 * (attempt + 1)))
                 logger.warning(
-                    "Rate limited fetching comments for post %s, waiting %s seconds", post_id, wait)
+                    "Rate limited fetching comments for post %s, waiting %s seconds",
+                    post_id, wait)
                 time.sleep(wait)
 
             elif str(response.status_code).startswith("5"):
@@ -121,18 +123,48 @@ class RedditExtractor:
             "All attempts failed fetching comments for post %s", post_id)
         return []
 
+    def enrich_posts_with_comments(self,
+                                   posts: list[dict],
+                                   comment_sort: str = "top",
+                                   comment_limit: int = 25,
+                                   min_upvotes: int = 5,
+                                   delay: float = 3.0) -> list[dict]:
+        """Attaches comment data to each post under a 'comments' key."""
+        for post in posts:
+            post_id = post["data"]["id"]
+            logger.info("Fetching comments for post %s in r/%s",
+                        post_id, self.subreddit)
 
-def extract_main(subreddits: list[str]) -> dict:
+            post["data"]["comments"] = self.get_comment_data(
+                post_id,
+                sort=comment_sort,
+                limit=comment_limit,
+                min_upvotes=min_upvotes
+            )
+            time.sleep(delay)
+
+        return posts
+
+
+def extract_main(subreddits: list[str], include_comments: bool = False) -> list[dict]:
     """Main function to run the functionality of the extract script."""
     results = []
-    # Iterates through each subreddit to gather all results
+
     for subreddit in subreddits:
         sub = RedditExtractor(subreddit)
         result = sub.get_post_data()
-        post_data = result.get("data").get("children")
-        results.append(result)
+
+        if not result:
+            logger.warning("No data returned for r/%s, skipping", subreddit)
+            continue
+
+        post_data = result.get("data", {}).get("children", [])
+
+        if include_comments:
+            post_data = sub.enrich_posts_with_comments(post_data)
+
+        results += post_data
         time.sleep(1)
-        # Pauses for 1 second to avoid rate limiting
 
     return results
 
@@ -153,7 +185,10 @@ if __name__ == "__main__":
     # limit on the number of comments checked as well, maybe related to the relevance to the mentioned stock and or
     # the number of comments already checked that include the data.
     # Get comments logic
+    # Design choice: Should the comments of a post be directly linked to that post for the sentiment and related stocks etc...
     # Transform script
+    # Including post comments is too challenging as you need to do 25x (for each post) as many requests as the standard
+    # and will be frequently rate limited unless using a reddit authenticated API
 
     # mappings = load_mappings()
     # tickers = mappings["symbol"].tolist()
@@ -161,8 +196,8 @@ if __name__ == "__main__":
     subreddits = ["trading", "stocks", "investing", "stockmarket", "valueinvesting", "options", "algotrading",
                   "semiconductors", "artificialinteligence", "cloudcomputing", "hardware", "wallstreetbets"]
 
-    results = extract_main(subreddits)
-    print([result.get("data").get("id")for result in results])
+    results = extract_main(subreddits, include_comments=False)
 
-    # comment_testing()
-    # print(results)
+    print(len(results))
+    print(results[0].keys())
+    print(results[0].get("data").get("comments"))

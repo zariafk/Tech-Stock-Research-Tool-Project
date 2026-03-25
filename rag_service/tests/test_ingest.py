@@ -1,4 +1,4 @@
-from app.ingest import convert_to_documents
+from app.ingest import normalise_alpaca_data
 import pytest
 
 
@@ -112,9 +112,9 @@ def sample_missing_timestamp_data():
 
 
 def test_convert_to_documents(sample_nvda_data):
-    """Test the convert_to_documents function with sample data."""
+    """Test the normalise_alpaca_data function with sample data."""
 
-    docs = convert_to_documents(sample_nvda_data)
+    docs = normalise_alpaca_data(sample_nvda_data)
 
     assert len(docs) == 1
     assert docs[0]["metadata"]["ticker"] == "NVDA"
@@ -122,10 +122,10 @@ def test_convert_to_documents(sample_nvda_data):
 
 
 def test_convert_to_documents_multiple_records(sample_apple_data, sample_nvda_data, sample_msft_data):
-    """Test the convert_to_documents function with multiple records."""
+    """Test the normalise_alpaca_data function with multiple records."""
 
     combined_data = sample_apple_data + sample_nvda_data + sample_msft_data
-    docs = convert_to_documents(combined_data)
+    docs = normalise_alpaca_data(combined_data)
 
     assert len(docs) == 3
     tickers = {doc["metadata"]["ticker"] for doc in docs}
@@ -138,18 +138,18 @@ def test_convert_to_documents_multiple_records(sample_apple_data, sample_nvda_da
                for doc in docs if doc["metadata"]["ticker"] == "MSFT")
 
 
-def test_convert_to_documents_empty_data():
-    """Test the convert_to_documents function with empty data."""
+def test_normalise_alpaca_data_empty_data():
+    """Test the normalise_alpaca_data function with empty data."""
 
-    docs = convert_to_documents([])
+    docs = normalise_alpaca_data([])
 
     assert len(docs) == 0
 
 
-def test_convert_to_documents_missing_fields(sample_incomplete_data):
-    """Test the convert_to_documents function with incomplete data."""
+def test_normalise_alpaca_data_missing_fields(sample_incomplete_data):
+    """Test the normalise_alpaca_data function with incomplete data."""
 
-    docs = convert_to_documents(sample_incomplete_data)
+    docs = normalise_alpaca_data(sample_incomplete_data)
 
     assert len(docs) == 1
     assert docs[0]["metadata"]["ticker"] == "AAPL"
@@ -160,25 +160,25 @@ def test_convert_to_documents_missing_fields(sample_incomplete_data):
     assert "volume" not in docs[0]["text"]
 
 
-def test_convert_to_documents_no_required_metrics(sample_no_metrics_data):
-    """Test the convert_to_documents function with data that has no required metrics."""
+def test_normalise_alpaca_data_no_required_metrics(sample_no_metrics_data):
+    """Test the normalise_alpaca_data function with data that has no required metrics."""
 
-    docs = convert_to_documents(sample_no_metrics_data)
-
-    assert len(docs) == 0
-
-
-def test_convert_to_documents_missing_ticker(sample_missing_ticker_data):
-    """Test the convert_to_documents function with data missing the ticker field."""
-
-    docs = convert_to_documents(sample_missing_ticker_data)
+    docs = normalise_alpaca_data(sample_no_metrics_data)
 
     assert len(docs) == 0
 
 
-def test_convert_to_documents_missing_timestamp(sample_missing_timestamp_data):
-    """Test the convert_to_documents function with data missing the timestamp field."""
+def test_normalise_alpaca_data_missing_ticker(sample_missing_ticker_data):
+    """Test the normalise_alpaca_data function with data missing the ticker field."""
 
-    docs = convert_to_documents(sample_missing_timestamp_data)
+    docs = normalise_alpaca_data(sample_missing_ticker_data)
+
+    assert len(docs) == 0
+
+
+def test_normalise_alpaca_data_missing_timestamp(sample_missing_timestamp_data):
+    """Test the normalise_alpaca_data function with data missing the timestamp field."""
+
+    docs = normalise_alpaca_data(sample_missing_timestamp_data)
 
     assert len(docs) == 0

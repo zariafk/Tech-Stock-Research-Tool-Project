@@ -18,7 +18,7 @@ def get_input_data(data_path=None, data=None):
     raise ValueError("Either data_path or data must be provided.")
 
 
-def convert_to_documents(data):
+def normalise_alpaca_data(data):
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
     required_metrics = ["open", "high", "low", "close", "volume"]
@@ -49,3 +49,20 @@ def convert_to_documents(data):
         })
 
     return documents
+
+
+def normalize_rss_record(record):
+    """Convert an RSS record into a standardized document format."""
+    title = record.get("title", "")
+    summary = record.get("summary", "")
+    url = record.get("url", "")
+
+    text = f"{title}. {summary}"
+
+    return {
+        "text": text.strip(),
+        "metadata": {
+            "source": "rss",
+            "url": url
+        }
+    }

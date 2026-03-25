@@ -2,9 +2,13 @@
 
 import os
 from dotenv import load_dotenv
+from logger import make_logger
 from openai import OpenAI, OpenAIError
 
 load_dotenv()
+
+# this should be in same directory as logger.py, so it can be imported directly
+logger = make_logger(__name__)
 
 MODEL = "gpt-3.5-turbo"
 TEMPERATURE = 0
@@ -34,7 +38,10 @@ def call_sentiment_api(text: str) -> str:
         ],
         temperature=TEMPERATURE,
     )
-    return response.choices[0].message.content.strip()
+
+    ai_response = response.choices[0].message.content.strip()
+
+    return ai_response
 
 
 def parse_sentiment_score(raw: str) -> float:
@@ -49,10 +56,10 @@ def analyze_sentiment(text: str) -> float:
     try:
         raw = call_sentiment_api(text)
     except OpenAIError as e:
-        print(f"API error: {e}")
+        logger.error("API error: %s", e)
         return 0.0
     try:
         return parse_sentiment_score(raw)
     except ValueError as e:
-        print(f"Parse error: {e}")
+        logger.error("Parse error: %s", e)
         return 0.0

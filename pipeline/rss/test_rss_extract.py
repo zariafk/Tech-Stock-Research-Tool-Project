@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import feedparser
 import requests
 
-from rss_extract import fetch_rss_feed, extract_article_fields
+from pipeline.rss.rss_extract_yahoo import fetch_rss_feed, extract_article_fields
 
 # === Fixtures ===
 

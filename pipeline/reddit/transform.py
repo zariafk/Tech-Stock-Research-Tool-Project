@@ -1,8 +1,8 @@
 import pandas as pd
 
 
-columns = ["id", "name", "permalink", "url", "title", "selftext", "link_flair_text", "ups", "upvote_ratio",
-           "num_comments", "created_utc", "author", "subreddit", "subreddit_id", "subreddit_subscribers"]
+columns = ["id", "name", "created_utc", "permalink", "url", "title", "selftext", "link_flair_text", "score", "ups", "upvote_ratio",
+           "num_comments", "author", "subreddit", "subreddit_id", "subreddit_subscribers"]
 
 # Steps
 # Take relevant

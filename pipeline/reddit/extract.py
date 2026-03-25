@@ -195,14 +195,31 @@ if __name__ == "__main__":
     ]
     results = extract_main(subreddits, include_comments=False)
 
+    columns = ["id", "name", "created_utc", "permalink", "url", "title", "selftext", "link_flair_text", "ups", "upvote_ratio",
+               "num_comments", "author", "subreddit", "subreddit_id", "subreddit_subscribers"]
+
+    result = results[0].get("data")
+
+    print(result.keys())
+
+    for column in columns:
+        data = result.get(column)
+        print(data)
+
     # To do
     # Figure out which json results to keep
-    # Get comment data for each relevant subreddit. This will be very intensive so I'm wondering about the logic.
-    # It think it should only be for relevant posts which mention the stock themselves and also there needs to be a
-    # limit on the number of comments checked as well, maybe related to the relevance to the mentioned stock and or
+    # Get comment data for each relevant subreddit. This will
+    # be very intensive so I'm wondering about the logic.
+    # It think it should only be for relevant posts which mention
+    # the stock themselves and also there needs to be a
+    # limit on the number of comments checked as well, maybe related
+    # to the relevance to the mentioned stock and or
     # the number of comments already checked that include the data.
     # Get comments logic
-    # Design choice: Should the comments of a post be directly linked to that post for the sentiment and related stocks etc...
+    # Design choice: Should the comments of a post be directly linked
+    # to that post for the sentiment and related stocks etc...
     # Transform script
-    # Including post comments is too challenging as you need to do 25x (for each post) as many requests as the standard
-    # and will be frequently rate limited unless using a reddit authenticated API
+    # Including post comments is too challenging as you need to do
+    # 25x (for each post) as many requests as the standard
+    # and will be frequently rate limited unless using a reddit
+    # authenticated API

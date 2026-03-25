@@ -16,13 +16,16 @@ def run_rag_pipeline(data_path, user_query, ticker=None):
 
     results = retrieve_documents(user_query, ticker=ticker)
     retrieved_docs = results["documents"][0]
-    context = build_context(retrieved_docs)
 
+    if not retrieved_docs:
+        return "I do not have enough information to answer that question."
+
+    context = build_context(retrieved_docs)
     answer = generate_answer(user_query, context)
     return answer
 
 
 if __name__ == "__main__":
-    query = "What was NVDA closing price?"
+    query = "What was NVDA closing price yesterday?"
     answer = run_rag_pipeline("data/sample_alpaca.json", query, ticker="NVDA")
     print(answer)

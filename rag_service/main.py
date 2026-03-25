@@ -1,13 +1,13 @@
 from app.ingest import load_data, convert_to_documents
 from app.embed import get_embeddings
+from app.vector_store import store_documents
 
-# load + convert
 data = load_data("data/sample_alpaca.json")
 docs = convert_to_documents(data)
 
-# embeddings
 texts = [doc["text"] for doc in docs]
 embeddings = get_embeddings(texts)
 
-print(len(embeddings))
-print(len(embeddings[0]))
+store_documents(docs, embeddings)
+
+print("stored successfully")

@@ -6,6 +6,16 @@ def load_data(file_path):
         return json.load(f)
 
 
+def get_input_data(data_path=None, data=None):
+    if data is not None:
+        return data
+
+    if data_path is not None:
+        return load_data(data_path)
+
+    raise ValueError("Either data_path or data must be provided.")
+
+
 def convert_to_documents(data):
     documents = []
 

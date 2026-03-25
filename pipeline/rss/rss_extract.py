@@ -143,26 +143,6 @@ def extract_entry_fields(entry: feedparser.FeedParserDict, source: str,) -> dict
     }
 
 
-# def is_relevant_openai(entry: dict, ticker: str, company_name: str) -> bool:
-#     """Check if article is relevant using OpenAI."""
-#     prompt = (
-#         'Is this article relevant to ''%s (%s) stock? '
-#         'Title: %s Summary: %s '
-#         'Answer with just yes or no.'
-#     ) % (company_name, ticker,
-#          entry['title'], entry['summary'])
-
-#     try:
-#         response = CLIENT.chat.completions.create(
-#             model='gpt-4o-mini',
-#             messages=[{'role': 'user', 'content': prompt}]
-#         )
-#         result = (response.choices[0].message.content.strip().lower())
-#         return result == 'yes'
-#     except Exception as e:
-#         logger.error('OpenAI API error: %s', e)
-#         return False
-
 def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     """Format OpenAI prompt for ticker matching."""
     ticker_str = ', '.join(tickers)

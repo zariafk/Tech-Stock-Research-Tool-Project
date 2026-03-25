@@ -1,5 +1,4 @@
-"""Reddit data extract script"""
-
+"""Reddit data extract script."""
 
 import time
 import logging
@@ -7,16 +6,12 @@ import logging
 import requests
 import pandas as pd
 
-# from ../logger import make_logger
-
-# logger = make_logger()
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_mappings(file_path: str = "../company_mapping.csv") -> list[str]:
+def load_mappings(file_path: str = "../company_mapping.csv") -> pd.DataFrame:
     """Loads in the tickers for the stocks of interest."""
     return pd.read_csv(file_path)
 
@@ -30,14 +25,14 @@ class RedditExtractor:
     VALID_SORTS = {"hot", "new", "top", "rising", "controversial"}
     TIME_FILTERED_SORTS = {"top", "controversial"}
 
-    def __init__(self,
-                 subreddit: str,
-                 sort_type: str = "hot",
-                 page_limit: int = 25,
-                 time_filter: str = "day",
-                 header: dict | None = None
-                 ) -> None:
-
+    def __init__(
+        self,
+        subreddit: str,
+        sort_type: str = "hot",
+        page_limit: int = 25,
+        time_filter: str = "day",
+        header: dict | None = None,
+    ) -> None:
         if sort_type not in self.VALID_SORTS:
             raise ValueError(f"sort_type must be one of {self.VALID_SORTS}")
 
@@ -49,7 +44,11 @@ class RedditExtractor:
 
     @property
     def base_url(self) -> str:
-        return f"https://www.reddit.com/r/{self.subreddit}/{self.sort_type}.json"
+        """Returns the JSON endpoint URL for the subreddit."""
+        return (
+            f"https://www.reddit.com/r/{self.subreddit}"
+            f"/{self.sort_type}.json"
+        )
 
     def build_params(self) -> dict:
         """Builds the parameter object to pass into the request."""
@@ -58,95 +57,113 @@ class RedditExtractor:
             params["t"] = self.time_filter
         return params
 
-    def get_post_data(self, retries: int = 5) -> dict:
-        """Returns the post data for the object's subreddit."""
+    def _request_with_retries(
+        self,
+        url: str,
+        params: dict,
+        retries: int = 5,
+        context: str = "",
+    ) -> requests.Response | None:
+        """Sends a GET request with retry logic for rate limits and server errors."""
         for attempt in range(retries):
             response = requests.get(
-                self.base_url,
-                params=self.build_params(),
-                headers=self.header
+                url, params=params, headers=self.header
             )
 
-            if response.ok is True:
-                return response.json()
-
-            elif response.status_code == 429:
-                wait = int(response.headers.get("Retry-After", 2))
-                logger.warning(
-                    "Rate limited for subreddit: %s, waiting %s seconds", self.subreddit, wait)
-                time.sleep(wait)
-
-            elif str(response.status_code).startswith("5"):
-                logger.warning("Attempt %s for subreddit: %s failed: %s",
-                               attempt + 1, self.subreddit, response.status_code)
-                time.sleep(2 + attempt)
-
-        logger.error("All %s attempts failed for %s", retries, self.subreddit)
-        return {}
-
-    def get_comment_data(self,
-                         post_id: str,
-                         sort: str = "top",
-                         limit: int = 25,
-                         min_upvotes: int = 1) -> list[dict]:
-        """Returns the top comments for a given post, filtered by minimum upvotes."""
-        url = f"https://www.reddit.com/r/{self.subreddit}/comments/{post_id}.json"
-        params = {"sort": sort, "limit": limit}
-
-        for attempt in range(5):
-            response = requests.get(url, params=params, headers=self.header)
-
             if response.ok:
-                # Reddit returns [post_listing, comment_listing]
-                comments_listing = response.json()[1]
-                comments = [
-                    child["data"]
-                    for child in comments_listing["data"]["children"]
-                    if child["kind"] == "t1" and child["data"]["ups"] >= min_upvotes
-                ]
-                return comments
+                return response
 
-            elif response.status_code == 429:
+            if response.status_code == 429:
                 wait = int(response.headers.get(
-                    "Retry-After", 5 * (attempt + 1)))
+                    "Retry-After", 5 * (attempt + 1)
+                ))
                 logger.warning(
-                    "Rate limited fetching comments for post %s, waiting %s seconds",
-                    post_id, wait)
+                    "Rate limited%s, waiting %s seconds", context, wait
+                )
                 time.sleep(wait)
 
-            elif str(response.status_code).startswith("5"):
-                logger.warning("Attempt %s for comments on post %s failed: %s",
-                               attempt + 1, post_id, response.status_code)
+            elif response.status_code >= 500:
+                logger.warning(
+                    "Attempt %s%s failed: %s",
+                    attempt + 1, context, response.status_code,
+                )
                 time.sleep(2 + attempt)
 
-        logger.error(
-            "All attempts failed fetching comments for post %s", post_id)
-        return []
+            else:
+                logger.error(
+                    "Unexpected status %s%s", response.status_code, context
+                )
+                break
 
-    def enrich_posts_with_comments(self,
-                                   posts: list[dict],
-                                   comment_sort: str = "top",
-                                   comment_limit: int = 25,
-                                   min_upvotes: int = 5,
-                                   delay: float = 3.0) -> list[dict]:
+        logger.error("All %s attempts failed%s", retries, context)
+        return None
+
+    def get_post_data(self, retries: int = 5) -> dict:
+        """Returns the post data for the object's subreddit."""
+        context = f" for subreddit: {self.subreddit}"
+        response = self._request_with_retries(
+            self.base_url, self.build_params(), retries, context
+        )
+        return response.json() if response else {}
+
+    def get_comment_data(
+        self,
+        post_id: str,
+        sort: str = "top",
+        limit: int = 25,
+        min_upvotes: int = 1,
+        retries: int = 5,
+    ) -> list[dict]:
+        """Returns top-level comments for a given post, filtered by minimum upvotes."""
+        url = (
+            f"https://www.reddit.com/r/{self.subreddit}"
+            f"/comments/{post_id}.json"
+        )
+        params = {"sort": sort, "limit": limit}
+        context = f" fetching comments for post {post_id}"
+
+        response = self._request_with_retries(url, params, retries, context)
+        if not response:
+            return []
+
+        # Reddit returns [post_listing, comment_listing]
+        comments_listing = response.json()[1]
+        return [
+            child["data"]
+            for child in comments_listing["data"]["children"]
+            if child["kind"] == "t1" and child["data"]["ups"] >= min_upvotes
+        ]
+
+    def enrich_posts_with_comments(
+        self,
+        posts: list[dict],
+        comment_sort: str = "top",
+        comment_limit: int = 25,
+        min_upvotes: int = 5,
+        delay: float = 3.0,
+    ) -> list[dict]:
         """Attaches comment data to each post under a 'comments' key."""
         for post in posts:
             post_id = post["data"]["id"]
-            logger.info("Fetching comments for post %s in r/%s",
-                        post_id, self.subreddit)
-
+            logger.info(
+                "Fetching comments for post %s in r/%s",
+                post_id, self.subreddit,
+            )
             post["data"]["comments"] = self.get_comment_data(
                 post_id,
                 sort=comment_sort,
                 limit=comment_limit,
-                min_upvotes=min_upvotes
+                min_upvotes=min_upvotes,
             )
             time.sleep(delay)
 
         return posts
 
 
-def extract_main(subreddits: list[str], include_comments: bool = False) -> list[dict]:
+def extract_main(
+    subreddits: list[str],
+    include_comments: bool = False,
+) -> list[dict]:
     """Main function to run the functionality of the extract script."""
     results = []
 
@@ -169,15 +186,15 @@ def extract_main(subreddits: list[str], include_comments: bool = False) -> list[
     return results
 
 
-def comment_testing():
-    sub = RedditExtractor("wallstreetbets")
-    result = sub.get_post_data()
-    print(result)
-    print(type(result))
-    # print(result.keys())
-
-
 if __name__ == "__main__":
+    subreddits = [
+        "trading", "stocks", "investing", "stockmarket",
+        "valueinvesting", "options", "algotrading", "semiconductors",
+        "artificialinteligence", "cloudcomputing", "hardware",
+        "wallstreetbets",
+    ]
+    results = extract_main(subreddits, include_comments=False)
+
     # To do
     # Figure out which json results to keep
     # Get comment data for each relevant subreddit. This will be very intensive so I'm wondering about the logic.
@@ -189,15 +206,3 @@ if __name__ == "__main__":
     # Transform script
     # Including post comments is too challenging as you need to do 25x (for each post) as many requests as the standard
     # and will be frequently rate limited unless using a reddit authenticated API
-
-    # mappings = load_mappings()
-    # tickers = mappings["symbol"].tolist()
-    # print(tickers)
-    subreddits = ["trading", "stocks", "investing", "stockmarket", "valueinvesting", "options", "algotrading",
-                  "semiconductors", "artificialinteligence", "cloudcomputing", "hardware", "wallstreetbets"]
-
-    results = extract_main(subreddits, include_comments=False)
-
-    print(len(results))
-    print(results[0].keys())
-    print(results[0].get("data").get("comments"))

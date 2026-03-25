@@ -12,6 +12,10 @@ columns = ["id", "name", "permalink", "url", "title", "selftext", "link_flair_te
 # section into respective tables
 # either keep as json list or convert to pandas df and then insert to bucket
 
+# mappings = load_mappings()
+# tickers = mappings["symbol"].tolist()
+# print(tickers)
+
 
 def transform_main():
     pass

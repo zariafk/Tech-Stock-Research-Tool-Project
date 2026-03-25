@@ -4,7 +4,7 @@ Cleans and standardises the raw DataFrame produced by rss_extract.
 Output columns: ticker, title, link, summary, published_date, source.
 """
 
-from logger import make_logger
+from pipeline.logger import make_logger
 import sys
 from pathlib import Path
 import pandas as pd

@@ -9,7 +9,7 @@ import feedparser
 import requests
 import time
 from requests.exceptions import RequestException as NetworkError
-from logger import make_logger
+from pipeline.logger import make_logger
 
 
 logger = make_logger()

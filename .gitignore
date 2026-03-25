@@ -1,7 +1,36 @@
-*.venv
+# Virtual environments
+.venv
+venv/
 
+# Environment variables
+.env
+.env.*
+
+# Terraform
 *.tfvars
 *.tfstate
 *.tfstate.backup
+.terraform/
+.terraform.lock.hcl
 
-*.env
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/

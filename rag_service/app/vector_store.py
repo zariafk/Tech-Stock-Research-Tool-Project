@@ -5,11 +5,14 @@ collection = client.get_or_create_collection(name="stock_data")
 
 
 def store_documents(documents, embeddings):
-    ids = [f"doc_{i}" for i in range(len(documents))]
+    ids = [
+        f"{doc['metadata']['ticker']}_{doc['metadata']['timestamp']}"
+        for doc in documents
+    ]
     texts = [doc["text"] for doc in documents]
     metadatas = [doc["metadata"] for doc in documents]
 
-    collection.add(
+    collection.upsert(
         ids=ids,
         documents=texts,
         embeddings=embeddings,

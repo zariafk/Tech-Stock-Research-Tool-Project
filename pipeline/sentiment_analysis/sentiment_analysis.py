@@ -1,62 +1,58 @@
+"""Sentiment analysis using OpenAI chat completions API."""
+
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
-
-# 1. Load variables from the .env file into the system environment
 load_dotenv()
 
-# 2. Initialize the client using the environment variable
-# If the key isn't found, os.getenv returns None and OpenAI will raise an error
+MODEL = "gpt-3.5-turbo"
+TEMPERATURE = 0
+POSITIVE_THRESHOLD = 0.25
+NEGATIVE_THRESHOLD = -0.25
+SYSTEM_PROMPT = (
+    "You are a precise sentiment analysis tool. "
+    "Return a single float between -1.0 (very negative) and 1.0 (very positive). "
+    "Return ONLY the number. No words, no punctuation."
+)
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def analyze_sentiment(text):
-    """
-    Analyzes text and returns a sentiment score from -1.0 to 1.0.
-    """
-    if not text.strip():
+def validate_text(text: str) -> bool:
+    """Return False if text is empty or whitespace-only."""
+    return bool(text.strip())
+
+
+def call_sentiment_api(text: str) -> str:
+    """Call OpenAI API and return the raw response string."""
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": text},
+        ],
+        temperature=TEMPERATURE,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def parse_sentiment_score(raw: str) -> float:
+    """Parse raw API string to float. Raises ValueError if not numeric."""
+    return float(raw)
+
+
+def analyze_sentiment(text: str) -> float:
+    """Return a sentiment score from -1.0 to 1.0; 0.0 for empty input."""
+    if not validate_text(text):
         return 0.0
-
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise sentiment analysis tool. "
-                        "Return a single float between -1.0 (very negative) and 1.0 (very positive). "
-                        "Return ONLY the number. No words, no punctuation."
-                    )
-                },
-                {"role": "user", "content": text}
-            ],
-            temperature=0,
-        )
-
-        # Clean the output and convert to float
-        result = response.choices[0].message.content.strip()
-        return float(result)
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
-
-if __name__ == "__main__":
-    print("--- AI Sentiment Analyzer (v2.0) ---")
-    print("Type 'exit' to quit.")
-
-    while True:
-        user_input = input("\nEnter text to analyze: ")
-
-        if user_input.lower() == 'exit':
-            break
-
-        score = analyze_sentiment(user_input)
-
-        if score is not None:
-            # Formatting the output for readability
-            color = "🟢" if score > 0.25 else "🔴" if score < -0.25 else "⚪"
-            print(f"Score: {score} {color}")
+        raw = call_sentiment_api(text)
+    except OpenAIError as e:
+        print(f"API error: {e}")
+        return 0.0
+    try:
+        return parse_sentiment_score(raw)
+    except ValueError as e:
+        print(f"Parse error: {e}")
+        return 0.0

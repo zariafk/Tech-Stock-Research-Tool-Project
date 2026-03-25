@@ -2,13 +2,12 @@
 
 import os
 from dotenv import load_dotenv
-from logger import make_logger
+from logger import logger
 from openai import OpenAI, OpenAIError
 
 load_dotenv()
 
 # this should be in same directory as logger.py, so it can be imported directly
-logger = make_logger(__name__)
 
 MODEL = "gpt-3.5-turbo"
 TEMPERATURE = 0

@@ -4,7 +4,6 @@ Fetches news for tech stock tickers from
 TechCrunch and Hacker News, 
 filters by relevance using OpenAI.
 """
-
 import logging
 from typing import Optional
 from datetime import datetime
@@ -12,18 +11,14 @@ import pandas as pd
 import feedparser
 import time
 from openai import OpenAI
-# from pipeline.logger import make_logger
 import requests
 import ssl
 import dotenv
 import os
+from logger import logger
 # import spacy
 
 dotenv.load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 TECH_TICKERS = [
     'AAPL',

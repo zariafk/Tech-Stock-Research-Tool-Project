@@ -1,3 +1,5 @@
+"""Top 100 tech companies by market capitalization for all of our pipelines"""
+
 tech_universe = [
     # Mega Cap Tech
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA",

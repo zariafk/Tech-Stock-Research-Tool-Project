@@ -182,7 +182,7 @@ def extract_fact_daily_stock_bars(symbols: list[str], start: str, end: str) -> l
 
             page_number = page_number + 1
 
-    except Exception:
+    except requests.RequestException:
         logger.exception("Daily stock bar extraction failed for %s symbols between %s and %s",
                          len(symbols), start, end)
         raise
@@ -307,6 +307,6 @@ if __name__ == "__main__":
             len(extracted_data["dataframes"]["fact_stock_snapshot"])
         )
 
-    except Exception:
+    except requests.RequestException:
         logger.exception("Script execution failed")
         raise

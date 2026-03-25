@@ -17,6 +17,12 @@ def generate_answer(query, context):
             Answer the user's question using only the context below.
             If the answer is not in the context, say you do not have enough information.
 
+            Give precise information, with contextual details, like date and time where appropriate, 
+            and avoid making assumptions or adding information not present in the context.
+
+            Never give financial advice or stock recommendations. Make it clear to the user that you cannot 
+            give financial advice if prompted. Focus on providing factual information based on the context.
+
             Context:
             {context}
 

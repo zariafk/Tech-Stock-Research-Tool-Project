@@ -1,11 +1,8 @@
-from app.pipeline import run_rag_pipeline
+from app.pipeline import ingest_data, answer_query
 
 if __name__ == "__main__":
-    """Example usage of the RAG pipeline."""
-    query = "What was nvidia closing price? and at what time?"
-    answer = run_rag_pipeline(
-        user_query=query,
-        ticker="NVDA",
-        data_path="data/sample_alpaca.json"
-    )
+    ingest_data(data_path="data/sample_alpaca.json")
+
+    query = "Why is NVDA high right now?"
+    answer = answer_query(query, ticker="NVDA")
     print(answer)

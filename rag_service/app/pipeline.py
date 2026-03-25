@@ -5,10 +5,8 @@ from app.retrieve import retrieve_documents
 from app.query import build_context, generate_answer
 
 
-def run_rag_pipeline(user_query, ticker=None, data_path=None, data=None):
-    """Run the full RAG pipeline: ingest, embed, store, retrieve, and generate answer."""
+def ingest_data(data_path=None, data=None):
     data = get_input_data(data_path=data_path, data=data)
-
     docs = convert_to_documents(data)
 
     texts = [doc["text"] for doc in docs]
@@ -16,11 +14,16 @@ def run_rag_pipeline(user_query, ticker=None, data_path=None, data=None):
 
     store_documents(docs, embeddings)
 
-    results = retrieve_documents(user_query, ticker=ticker)
-    retrieved_docs = results["documents"][0]
 
-    if not retrieved_docs:
+def answer_query(user_query, ticker=None):
+    results = retrieve_documents(user_query, ticker=ticker)
+
+    documents = results.get("documents", [])
+    if not documents or not documents[0]:
         return "I do not have enough information to answer that question."
+
+    retrieved_docs = documents[0]
+    print("RETRIEVED DOCS:", retrieved_docs)
 
     context = build_context(retrieved_docs)
     answer = generate_answer(user_query, context)

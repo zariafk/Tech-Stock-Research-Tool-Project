@@ -5,7 +5,7 @@ collection = client.get_or_create_collection(name="stock_data")
 
 
 def store_documents(documents, embeddings):
-    """Store documents and their embeddings in the ChromaDB collection."""
+    """Store documents and their corresponding embeddings in the ChromaDB collection."""
     ids = [
         f"{doc['metadata']['ticker']}_{doc['metadata']['timestamp']}"
         for doc in documents

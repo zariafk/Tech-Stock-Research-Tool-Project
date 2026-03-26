@@ -201,6 +201,8 @@ if __name__ == "__main__":
     ]
     results = extract_main(subreddits, include_comments=False)
 
+    print(results[0])
+
     # To do
     # Figure out which json results to keep
     # Get comment data for each relevant subreddit. This will

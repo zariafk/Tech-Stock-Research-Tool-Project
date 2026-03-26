@@ -94,18 +94,27 @@ def parse_relevance_data(response: str) -> list[dict]:
         return []
 
 
-def get_ticker_analysis(entry: dict, tickers: list[str]) -> list[dict]:
-    """Analyze high-potential articles with OpenAI."""
+def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -> list[dict]:
+    """Analyze high-potential articles with OpenAI. 
+    Retries with exponential backoff on rate limits."""
     prompt = format_ticker_prompt(entry, tickers)
 
-    response = CLIENT.chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[{'role': 'user', 'content': prompt}]
-    )
-
-    return parse_relevance_data(
-        response.choices[0].message.content
-    )
+    for attempt in range(max_retries):
+        try:
+            response = CLIENT.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[{'role': 'user', 'content': prompt}]
+            )
+            return parse_relevance_data(response.choices[0].message.content)
+        except Exception as e:
+            if 'rate_limit' in str(e).lower() and attempt < max_retries - 1:
+                backoff = 2 ** attempt
+                logger.warning(
+                    f'Rate limited. Retrying in {backoff}s... (attempt {attempt + 1}/{max_retries})')
+                time.sleep(backoff)
+            else:
+                logger.error(f'OpenAI error after {attempt + 1} attempts: {e}')
+                return []
 
 
 def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
@@ -113,16 +122,19 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
     filtered = []
 
     for article in articles:
+        # Step 1: Fast keyword match (skip if no tickers found)
         potential_tickers = extract_keywords(article, tickers)
         if not potential_tickers:
             continue
 
+        # Step 2: Call OpenAI for relevance/sentiment (with retry backoff)
         analysis = get_ticker_analysis(article, potential_tickers)
-        time.sleep(1)
+        time.sleep(0.2)  # Rate limit protection between calls
 
+        # Step 3: Merge OpenAI results with article, one row per ticker hit
         for result in analysis:
             copy = article.copy()
-            copy.update(result)
+            copy.update(result)  # Add score, sentiment, analysis
             filtered.append(copy)
 
     return filtered

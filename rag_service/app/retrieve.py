@@ -1,20 +1,37 @@
-from app.vector_store import collection
+from app.vector_store import client
 from app.embed import get_embeddings
 
 
+def get_collection():
+    return client.get_or_create_collection(name="stock_data")
+
+
 def format_query(query, ticker=None):
-    """Format the user query by optionally adding the ticker information."""
     if ticker:
         return f"Stock {ticker}. {query}"
     return query
 
 
-def retrieve_documents(query, ticker=None, n_results=2):
-    """Retrieve relevant documents from the ChromaDB collection based on the user query and optional ticker filter."""
+def retrieve_documents(query, ticker=None, source=None, n_results=2):
     formatted_query = format_query(query, ticker)
     query_embedding = get_embeddings([formatted_query])[0]
 
-    where_filter = {"ticker": ticker} if ticker else None
+    filters = []
+
+    if ticker:
+        filters.append({"ticker": ticker})
+
+    if source:
+        filters.append({"source": source})
+
+    if len(filters) == 1:
+        where_filter = filters[0]
+    elif len(filters) > 1:
+        where_filter = {"$and": filters}
+    else:
+        where_filter = None
+
+    collection = get_collection()
 
     results = collection.query(
         query_embeddings=[query_embedding],

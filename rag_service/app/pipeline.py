@@ -9,20 +9,36 @@ def ingest_data(source, data_path=None, data=None):
     data = get_input_data(data_path=data_path, data=data)
     docs = convert_to_documents(data, source)
 
+    if not docs:
+        return
+
     texts = [doc["text"] for doc in docs]
     embeddings = get_embeddings(texts)
 
     store_documents(docs, embeddings)
 
 
-def answer_query(user_query, ticker=None):
-    results = retrieve_documents(user_query, ticker=ticker)
+def answer_query(user_query, ticker=None, sources=None):
+    if sources is None:
+        sources = ["alpaca", "rss"]
 
-    documents = results.get("documents", [])
-    if not documents or not documents[0]:
+    retrieved_docs = []
+
+    for source in sources:
+        if "price" in user_query.lower() or "close" in user_query.lower():
+            n_results = 2 if source == "alpaca" else 1
+        else:
+            n_results = 1 if source == "alpaca" else 3
+
+        results = retrieve_documents(
+            user_query, ticker=ticker, source=source, n_results=n_results
+        )
+        docs = results.get("documents", [[]])[0]
+        retrieved_docs.extend(docs)
+
+    if not retrieved_docs:
         return "I do not have enough information to answer that question."
 
-    retrieved_docs = documents[0]
     print("RETRIEVED DOCS:", retrieved_docs)
 
     context = build_context(retrieved_docs)

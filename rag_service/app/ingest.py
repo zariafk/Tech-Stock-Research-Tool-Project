@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 
 
@@ -33,7 +34,6 @@ def validate_alpaca_record(record, required_metrics):
 def convert_to_documents(data, source):
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
-    required_metrics = ["open", "high", "low", "close", "volume"]
 
     for record in data:
         if source == "alpaca":
@@ -54,7 +54,7 @@ def convert_to_documents(data, source):
         elif source == "rss":
             document = normalize_rss_record(record)
 
-            if document["text"]:
+            if document is not None:
                 documents.append(document)
 
     return documents
@@ -78,19 +78,21 @@ def normalise_alpaca_record(record) -> str:
 
 
 def normalize_rss_record(record):
-    """Convert an RSS record into a standardized document format."""
-    title = record.get("title", "")
-    summary = record.get("summary", "")
-    url = record.get("url", "")
-    ticker = record.get("ticker")
+    """Convert raw RSS feed data into a standardized document format."""
+    text = record.get("text", "").strip()
+    metadata = record.get("metadata", {})
 
-    text = f"{title}. {summary}"
+    if not text or not metadata:
+        return None
 
     return {
-        "text": text.strip(),
+        "text": text,
         "metadata": {
-            "source": "rss",
-            "ticker": ticker,
-            "url": url
+            "source": metadata.get("source", "rss"),
+            "ticker": metadata.get("ticker"),
+            "timestamp": metadata.get("published_date"),
+            "link": metadata.get("link"),
+            "relevance_score": metadata.get("relevance_score"),
+            "sentiment": metadata.get("sentiment"),
         }
     }

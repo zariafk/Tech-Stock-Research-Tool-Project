@@ -65,3 +65,6 @@ def main():
 if __name__ == "__main__":
 
     main()
+
+    # bucket = "c22-tsrt-terraform-state"
+    # key = "global/secrets_repository/terraform.tfstate"

@@ -22,3 +22,32 @@ Automated extraction and sentiment analysis for the top 100 tech companies. Desi
 3. Filter: Match against top_100_tech_companies.py.
 4. Analyze: OpenAI determines Relevance & Sentiment.
 5. Output: Standardized DataFrame for S3.
+
+## Analysis
+-     Act as: Senior Quant Analyst.
+    Universe: {", ".join(tickers)}
+    Input: "{entry['title']}" | "{entry['summary']}"
+
+    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
+
+    Relevance Rubric:
+    - 10: Direct idiosyncratic event (Earnings, M&A).
+    - 8: Significant business news (New product, contract).
+    - 7: Indirect impact (Competitor/Sector news).
+    - <7: Ignore.
+
+    Sentiment Rubric (Strictly use these values):
+    - 1.0: Transformational positive news.
+    - 0.5: Incremental/Standard positive news.
+    - 0.0: Neutral/Mixed news.
+    - -0.5: Incremental negative news.
+    - -1.0: Catastrophic negative news.
+
+    Output Format (JSON list):
+    [{{
+      "t": "TICKER",
+      "r": [score],
+      "s": [score],
+      "why": "one sentence justification"
+    }}]
+    """

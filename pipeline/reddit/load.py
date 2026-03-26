@@ -1,129 +1,175 @@
-"""Reddit data extract script"""
+"""Reddit data load script — writes DataFrames to S3 as partitioned Parquet."""
 
-
-import time
+import json
 import logging
+from datetime import datetime, timezone
+from io import BytesIO
 
-import requests
+import boto3
 import pandas as pd
-
-# from ../logger import make_logger
-
-# logger = make_logger()
+import pyarrow.parquet as pq
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_mappings(file_path: str = "../company_mapping.csv") -> list[str]:
-    """Loads in the tickers for the stocks of interest."""
-    return pd.read_csv(file_path)
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
 
 
-class RedditExtractor:
+def get_s3_client(secret: dict) -> boto3.client:
+    """Creates an S3 client using credentials from a secret dict."""
+    return boto3.client(
+        "s3",
+        aws_access_key_id=secret["aws_access_key_id"],
+        aws_secret_access_key=secret["aws_secret_access_key"],
+        region_name=secret.get("region", "eu-west-2"),
+    )
+
+
+def build_s3_key(table_name: str, run_date: datetime) -> str:
+    """Builds a date-partitioned S3 key."""
+    return (
+        f"{table_name}"
+        f"/year={run_date.strftime('%Y')}"
+        f"/month={run_date.strftime('%m')}"
+        f"/day={run_date.strftime('%d')}"
+        f"/data.parquet"
+    )
+
+
+def list_parquet_keys(
+    s3_client: boto3.client,
+    bucket: str,
+    prefix: str,
+) -> list[str]:
+    """Lists all .parquet file keys under a given S3 prefix."""
+    keys = []
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".parquet"):
+                keys.append(obj["Key"])
+
+    return keys
+
+
+def read_column_from_s3_parquet(
+    s3_client: boto3.client,
+    bucket: str,
+    key: str,
+    column: str,
+) -> pd.Series:
+    """Reads a single column from a Parquet file stored in S3."""
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    table = pq.read_table(BytesIO(response["Body"].read()), columns=[column])
+    return table.to_pandas()[column]
+
+
+def get_existing_ids(
+    s3_client: boto3.client,
+    bucket: str,
+    table_name: str,
+    id_column: str = "id",
+) -> set[str]:
+    """Collects all existing IDs for a table by scanning its Parquet files in S3."""
+    keys = list_parquet_keys(s3_client, bucket, prefix=table_name + "/")
+
+    if not keys:
+        logger.info("No existing data found for %s", table_name)
+        return set()
+
+    all_ids = set()
+    for key in keys:
+        ids = read_column_from_s3_parquet(s3_client, bucket, key, id_column)
+        all_ids.update(ids)
+
+    logger.info("Found %d existing IDs in %s across %d files",
+                len(all_ids), table_name, len(keys))
+    return all_ids
+
+
+def deduplicate(
+    df: pd.DataFrame,
+    existing_ids: set[str],
+    id_column: str = "id",
+) -> pd.DataFrame:
+    """Removes rows whose ID already exists in the bucket."""
+    before = len(df)
+    df = df[~df[id_column].isin(existing_ids)]
+    removed = before - len(df)
+
+    if removed:
+        logger.info("Removed %d duplicate rows, %d new rows remaining",
+                    removed, len(df))
+    return df
+
+
+def upload_dataframe_to_s3(
+    s3_client: boto3.client,
+    df: pd.DataFrame,
+    bucket: str,
+    s3_key: str,
+) -> None:
+    """Converts a DataFrame to Parquet in memory and uploads it to S3."""
+    buffer = df.to_parquet(index=False)
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=buffer,
+    )
+    logger.info("Uploaded s3://%s/%s (%d rows)", bucket, s3_key, len(df))
+
+
+def load_main(
+    tables: dict[str, pd.DataFrame],
+    *,
+    secret_name: str,
+    dedupe_config: dict[str, str] | None = None,
+    region: str = "eu-west-2",
+) -> None:
+    """Loads all tables to S3 as date-partitioned Parquet files.
+
+    Args:
+        tables: Mapping of table name to DataFrame.
+        secret_name: Name of the secret in AWS Secrets Manager.
+        dedupe_config: Optional mapping of table name to the column
+                       used for deduplication, e.g. {"fact_posts": "id"}.
+        region: AWS region for Secrets Manager.
     """
-    Each object of this class represents a unique subreddit,
-    which can be queried for data containing recent posts.
-    """
+    secret = get_secret(secret_name, region)
+    s3_client = get_s3_client(secret)
+    bucket = secret["bucket_name"]
+    run_date = datetime.now(timezone.utc)
 
-    VALID_SORTS = {"hot", "new", "top", "rising", "controversial"}
-    TIME_FILTERED_SORTS = {"top", "controversial"}
+    if dedupe_config is None:
+        dedupe_config = {}
 
-    def __init__(self,
-                 subreddit: str,
-                 sort_type: str = "hot",
-                 page_limit: int = 25,
-                 time_filter: str = "day",
-                 header: dict | None = None
-                 ) -> None:
+    for table_name, df in tables.items():
+        if df.empty:
+            logger.warning("Skipping empty table: %s", table_name)
+            continue
 
-        if sort_type not in self.VALID_SORTS:
-            raise ValueError(f"sort_type must be one of {self.VALID_SORTS}")
-
-        self.subreddit = subreddit
-        self.sort_type = sort_type
-        self.page_limit = min(page_limit, 100)
-        self.time_filter = time_filter
-        self.header = header or {"User-Agent": "script:v1.0 (by /u/sigmabot)"}
-
-    @property
-    def base_url(self) -> str:
-        return f"https://www.reddit.com/r/{self.subreddit}/{self.sort_type}.json"
-
-    def build_params(self) -> dict:
-        """Builds the parameter object to pass into the request."""
-        params = {"limit": self.page_limit}
-        if self.sort_type in self.TIME_FILTERED_SORTS:
-            params["t"] = self.time_filter
-        return params
-
-    def get_post_data(self, retries: int = 5) -> dict:
-        """Returns the post data for the object's subreddit."""
-        for attempt in range(retries):
-            response = requests.get(
-                self.base_url,
-                params=self.build_params(),
-                headers=self.header
+        # Deduplicate if configured for this table
+        if table_name in dedupe_config:
+            id_column = dedupe_config[table_name]
+            existing_ids = get_existing_ids(
+                s3_client, bucket, table_name, id_column
             )
+            df = deduplicate(df, existing_ids, id_column)
 
-            if response.ok is True:
-                return response.json()
+            if df.empty:
+                logger.info(
+                    "No new rows for %s after deduplication", table_name)
+                continue
 
-            elif response.status_code == 429:
-                wait = int(response.headers.get("Retry-After", 2))
-                logger.warning(
-                    "Rate limited for subreddit: %s, waiting %s seconds", self.subreddit, wait)
-                time.sleep(wait)
+        s3_key = build_s3_key(table_name, run_date)
+        upload_dataframe_to_s3(s3_client, df, bucket, s3_key)
 
-            elif str(response.status_code).startswith("5"):
-                logger.warning("Attempt %s for subreddit: %s failed: %s",
-                               attempt + 1, self.subreddit, response.status_code)
-                time.sleep(2 + attempt)
-
-        logger.error("All %s attempts failed for %s", retries, self.subreddit)
-        return {}
-
-
-def extract_main(subreddits: list[str]) -> dict:
-    """Main function to run the functionality of the extract script."""
-    results = []
-    # Iterates through each subreddit to gather all results
-    for subreddit in subreddits:
-        sub = RedditExtractor(subreddit)
-        result = sub.get_post_data()
-        results.append(result)
-        time.sleep(1)
-        # Pauses for 1 second to avoid rate limiting
-
-    return results
-
-
-def comment_testing():
-    sub = RedditExtractor("wallstreetbets")
-    result = sub.get_post_data()
-    print(result)
-    print(type(result))
-    # print(result.keys())
-
-
-if __name__ == "__main__":
-    # To do
-    # Figure out which json results to keep
-    # Get comment data for each relevant subreddit. This will be very intensive so I'm wondering about the logic.
-    # It think it should only be for relevant posts which mention the stock themselves and also there needs to be a
-    # limit on the number of comments checked as well, maybe related to the relevance to the mentioned stock and or
-    # the number of comments already checked that include the data.
-    # Get comments logic
-    # Transform script
-
-    # mappings = load_mappings()
-    # tickers = mappings["symbol"].tolist()
-    # print(tickers)
-    # subreddits = ["trading", "stocks", "investing", "stockmarket", "valueinvesting", "options", "algotrading",
-    #               "semiconductors", "artificialinteligence", "cloudcomputing", "hardware", "wallstreetbets"]
-
-    # results = extract_main(subreddits)
-    # print(len(results))
-    comment_testing()
-    # print(results)
+    logger.info("Load complete — %d tables processed", len(tables))

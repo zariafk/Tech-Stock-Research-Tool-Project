@@ -8,7 +8,6 @@ from rss_extract_live import (
     extract_live,
     RSS_FEEDS
 )
-
 from openai import OpenAI
 import os
 import dotenv
@@ -17,7 +16,6 @@ import pandas as pd
 import json
 import hashlib
 from logger import logger
-
 from top_100_tech_companies import tech_universe
 
 dotenv.load_dotenv()
@@ -129,7 +127,7 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
 
         # Step 2: Call OpenAI for relevance/sentiment (with retry backoff)
         analysis = get_ticker_analysis(article, potential_tickers)
-        time.sleep(0.2)  # Rate limit protection between calls
+        # time.sleep(0.2)  # Rate limit protection between calls
 
         # Step 3: Merge OpenAI results with article, one row per ticker hit
         for result in analysis:

@@ -92,18 +92,6 @@ def prepare_for_rag(df: pd.DataFrame) -> list[dict]:
       - id: unique article identifier (article_id hash)
       - text: content to be embedded (title + summary + AI analysis)
       - metadata: structured fields for filtering at retrieval time
-
-    NOTE FOR TEAMMATE:
-    -------------------------------------------------------------------------
-    Add your chunking and embedding logic below.
-    Input:  `documents` — list of dicts, each with 'id', 'text', 'metadata'
-    Output: chunked/embedded format required by your vector store (e.g. Pinecone, FAISS, Weaviate)
-
-    Suggested steps:
-      1. Chunk `doc['text']` if articles exceed your embedding model's token limit
-      2. Generate embeddings (e.g. OpenAI text-embedding-3-small)
-      3. Upsert to vector store with doc['id'] and doc['metadata']
-    -------------------------------------------------------------------------
     """
     documents = []
 

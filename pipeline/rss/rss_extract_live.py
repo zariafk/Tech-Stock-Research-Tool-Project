@@ -63,7 +63,7 @@ def extract_live(feeds: dict) -> list[dict]:
     for source, url in feeds.items():
         logger.info('LIVE: Processing: %s', source)
         feed = fetch_feed(url)
-        time.sleep(2)
+        time.sleep(0.2)
 
         if feed is None:
             continue

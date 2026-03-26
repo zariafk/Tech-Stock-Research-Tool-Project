@@ -13,7 +13,7 @@ from logger import logger
 # Constants for API configuration and lookback window
 ALGOLIA_HN_URL = 'https://hn.algolia.com/api/v1/search'
 HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
-HN_MAX_RESULTS = 1   # Filter for top-relevance hits to manage LLM token costs
+HN_MAX_RESULTS = 2   # Filter for top-relevance hits to manage LLM token costs
 
 
 def get_hn_historical(company_name: str) -> list[dict]:
@@ -88,7 +88,7 @@ def extract_historical(tickers_map: dict) -> list[dict]:
             articles.append(article_copy)
 
         # Politeness delay to avoid IP blacklisting (Rate Limit Management)
-        time.sleep(1)
+        time.sleep(0.1)
 
     logger.info(
         'HIST: Batch Extraction Complete: %d historical signals mapped to %d tickers.',

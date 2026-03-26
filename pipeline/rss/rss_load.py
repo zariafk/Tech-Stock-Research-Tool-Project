@@ -35,11 +35,11 @@ def download_existing(client, bucket: str, key: str) -> pd.DataFrame:
         response = client.get_object(Bucket=bucket, Key=key)
         existing = pd.read_parquet(io.BytesIO(response['Body'].read()))
         logger.info(
-            f"Downloaded {len(existing)} existing articles from s3://{bucket}/{key}")
+            "Downloaded %d existing articles from s3://%s/%s", len(existing), bucket, key)
         return existing
     except Exception as e:
         if hasattr(e, 'response') and e.response['Error']['Code'] == 'NoSuchKey':
-            logger.info(f"No existing file at {key} — starting fresh.")
+            logger.info("No existing file at %s — starting fresh.", key)
             return pd.DataFrame()
         raise
 
@@ -50,7 +50,7 @@ def upload(client, bucket: str, key: str, df: pd.DataFrame) -> None:
     df.to_parquet(buffer, index=False, engine='pyarrow')
     buffer.seek(0)
     client.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue())
-    logger.info(f"Uploaded {len(df)} articles to s3://{bucket}/{key}")
+    logger.info("Uploaded %d articles to s3://%s/%s", len(df), bucket, key)
 
 
 def load(df: pd.DataFrame, bucket: str = None, date: datetime = None) -> int:
@@ -90,7 +90,7 @@ def load(df: pd.DataFrame, bucket: str = None, date: datetime = None) -> int:
         total_net_new += net_new
 
         logger.info(
-            f"[{ticker}] Deduplication: {before - len(combined)} duplicates removed. {net_new} net new articles.")
+            "[%s] Deduplication: %d duplicates removed. %d net new articles.", ticker, before - len(combined), net_new)
 
         # Re-upload merged partition
         upload(client, bucket, key, combined)
@@ -110,6 +110,6 @@ if __name__ == '__main__':
     else:
         latest = csv_files[-1]
         df = pd.read_csv(latest)
-        print(f"Loaded {len(df)} articles from {latest}")
+        print("Loaded %d articles from %s", len(df), latest)
         net_new = load(df)
-        print(f"Net new articles uploaded to S3: {net_new}")
+        print("Net new articles uploaded to S3: %d", net_new)

@@ -1,4 +1,6 @@
 """RSS Pipeline: Extract, Transform, Load (ETL) for Tech News Articles"""
+import json
+
 from rss_extract import extract
 from rss_transform import transform
 from rss_load import load
@@ -20,3 +22,24 @@ def run_rss_pipeline():
     net_new = load(rss_articles)
     logger.info("RSS pipeline run complete. %s net new articles loaded.",
                 net_new)
+
+
+def lambda_handler(event, context):
+    """ Entry point for AWS Lambda where the pipeline can be triggered by an event."""
+    try:
+        print("Starting the pipeline execution...")
+        run_rss_pipeline()
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Pipeline executed successfully!')
+        }
+    except Exception as e:
+        print(f"Pipeline execution failed: {e}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps('Pipeline execution failed.')
+        }
+
+
+if __name__ == "__main__":
+    run_rss_pipeline()

@@ -1,0 +1,102 @@
+
+terraform {
+  backend "s3" {
+    bucket = "c22-tsrt-terraform-state"
+    key    = "stocksiphon/pipeline/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_ecr_repository" "c22_stocksiphon_rss_ecr" {
+  name = "c22-stocksiphon-rss-ecr"
+}
+
+resource "aws_ecr_repository" "c22_stocksiphon_alpaca_ecr" {
+  name = "c22-stocksiphon-alpaca-ecr"
+}
+
+resource "aws_ecr_repository" "c22_stocksiphon_reddit_ecr" {
+  name = "c22-stocksiphon-reddit-ecr"
+}
+
+resource "aws_lambda_function" "c22_stocksiphon_rss_lambda" {
+  function_name = "c22-stocksiphon-rss-lambda"
+  role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
+  image_uri     = "${aws_ecr_repository.c22_stocksiphon_rss_ecr.repository_url}:latest"
+  package_type  = "Image"
+  timeout       = 300
+}
+
+resource "aws_lambda_function" "c22_stocksiphon_alpaca_lambda" {
+  function_name = "c22-stocksiphon-alpaca-lambda"
+  role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
+  image_uri     = "${aws_ecr_repository.c22_stocksiphon_alpaca_ecr.repository_url}:latest"
+  package_type  = "Image"
+  timeout       = 300
+}
+
+resource "aws_lambda_function" "c22_stocksiphon_reddit_lambda" {
+  function_name = "c22-stocksiphon-reddit-lambda"
+  role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
+  image_uri     = "${aws_ecr_repository.c22_stocksiphon_reddit_ecr.repository_url}:latest"
+  package_type  = "Image"
+  timeout       = 300
+}
+
+resource "aws_iam_role" "c22_stocksiphon_lambda_role" {
+  name = "c22-stocksiphon-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_policy" {
+  role       = aws_iam_role.c22_stocksiphon_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_s3_policy" {
+  role      = aws_iam_role.c22_stocksiphon_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_athena_policy" {
+  role       = aws_iam_role.c22_stocksiphon_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonAthenaFullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_ecr_policy" {
+  role       = aws_iam_role.c22_stocksiphon_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+data "aws_secretsmanager_secret" "c22_stocksiphon_api_keys" {
+  name = "c22-stocksiphon-api-keys"
+}
+
+resource "aws_iam_role_policy" "c22_stocksiphon_lambda_secrets_policy" {
+  name = "c22-stocksiphon-lambda-secrets-policy"
+  role = aws_iam_role.c22_stocksiphon_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = data.aws_secretsmanager_secret.c22_stocksiphon_api_keys.arn
+    }]
+  })
+}
+

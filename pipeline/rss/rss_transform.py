@@ -2,6 +2,9 @@
 
 Cleans and standardises the raw DataFrame produced by rss_extract.
 Output columns: ticker, title, link, summary, published_date, source.
+
+
+NEED TO DEDUPLICATE BEFORE OPENAI FILTERING, OTHERWISE we get multiple copies of the same article if it appears in multiple feeds (e.g. Apple news from both TechCrunch and HN).
 """
 
 # from pipeline.logger import make_logger
@@ -9,6 +12,7 @@ Output columns: ticker, title, link, summary, published_date, source.
 import sys
 from pathlib import Path
 import pandas as pd
+from logger import logger
 
 
 REQUIRED_COLUMNS = [

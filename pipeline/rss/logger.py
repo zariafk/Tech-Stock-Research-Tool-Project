@@ -9,7 +9,6 @@ def make_logger() -> logging.Logger:
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s : %(message)s",
         handlers=[
-            logging.FileHandler("pipeline.log"),  # saves to file
             logging.StreamHandler()  # also logs to stdout (for CloudWatch/containers)
         ]
     )

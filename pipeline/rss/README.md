@@ -1,8 +1,24 @@
+# RSS & News Pipeline
 
+Automated extraction and sentiment analysis for the top 100 tech companies. Designed for hourly AWS Lambda execution.
 
-**TechCrunch**
-https://techcrunch.com/feed/
-`What it covers`: Startup fundraising, acquisitions, and product launches.
-`Fair warning`: TechCrunch prioritizes speed over depth. Expect dozens of short posts daily. They've acknowledged a pro-startup bias. Quality varies: some readers on Trustpilot note it "used to be the go-to source" but has experienced inconsistency. The signal is in the data, not the analysis.
-`Frequency`	20–40 articles/day
-`Format`	Full-text RSS
+## Features
+- **Live/Historical**: Merges TechCrunch RSS (live) with Hacker News Algolia API (historical).
+- **Smart Filter**: Pre-filters by keyword before calling OpenAI to minimize costs.
+- **AI Enrichment**: Uses GPT-4o-mini for ticker-specific relevance scoring (0-10) and sentiment (-1.0 to 1.0).
+- **Persistent Deduplication**: Generates MD5 article_id from links to prevent duplicate S3 entries across runs.
+
+## Setup
+1. Create .env: OPENAI_API_KEY=your_key
+2. Install dependencies: pip install -r ../requirements.txt
+
+## Usage
+- Run Extraction: python rss_extract.py (saves test_results_*.csv locally for verification)
+- Transform: rss_transform.py cleans and prepares data for storage
+
+## Logic Flow
+1. Extract: Pull raw articles from RSS and HN.
+2. Deduplicate: Filter unique links.
+3. Filter: Match against top_100_tech_companies.py.
+4. Analyze: OpenAI determines Relevance & Sentiment.
+5. Output: Standardized DataFrame for S3.

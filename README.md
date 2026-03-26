@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ETL Pipelines for
 * RSS Feeds
 * Reddit
@@ -20,3 +21,6 @@ The namespace is where that fixture lives — in this case, the test module.
 **MagicMock**:
 A fake object that pretends to be something else. 
 When you patch a function with MagicMock, you're saying whenever this real function is called during the test, use my fake version instead.
+=======
+# Tech Stock Dashboard
+>>>>>>> a12f5fbc44a7b0c0fd5058fb55db286fb363ae7e

@@ -1,0 +1,7 @@
+pandas
+openai
+chromadb
+pytest
+requests
+python-dotenv
+boto3

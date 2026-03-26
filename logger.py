@@ -14,3 +14,5 @@ def make_logger() -> logging.Logger:
         ]
     )
     return logger
+    
+logger = make_logger()

@@ -3,7 +3,8 @@ from app.pipeline import ingest_data, answer_query
 if __name__ == "__main__":
     ingest_data(source="alpaca", data_path="data/sample_alpaca.json")
     ingest_data(source="rss", data_path="data/sample_rss.json")
+    ingest_data(source="reddit", data_path="data/sample_reddit.json")
 
-    query = "Why is NVDA price going up?"
-    answer = answer_query(query, ticker="NVDA", sources=["rss"])
+    query = "What is happening with NVDA?"
+    answer = answer_query(query, sources=["reddit"])
     print(answer)

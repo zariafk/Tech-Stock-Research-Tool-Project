@@ -17,6 +17,11 @@ def build_document_id(doc):
         link = metadata.get("link", "no_link")
         return f"rss_{ticker}_{timestamp}_{link}"
 
+    if source == "reddit":
+        timestamp = metadata.get("timestamp", "no_timestamp")
+        url = metadata.get("url", "no_url")
+        return f"reddit_{timestamp}_{url}"
+
     return f"{source}_{hash(doc['text'])}"
 
 

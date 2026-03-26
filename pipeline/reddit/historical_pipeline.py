@@ -1,8 +1,9 @@
 """Main pipeline orchestrator."""
 
 import logging
+from datetime import datetime, timezone
 
-from extract import extract_main
+from historical_extract import extract_historical
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
 from load import get_secret, get_connection, get_existing_ids, load_main
@@ -38,8 +39,12 @@ def run_pipeline() -> None:
     conn = get_connection(secret)
 
     try:
-        logger.info("Starting extract")
-        raw_posts = extract_main(SUBREDDITS, include_comments=False)
+        logger.info("Starting historical extract")
+        raw_posts = extract_historical(
+            SUBREDDITS,
+            start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 25, tzinfo=timezone.utc),
+        )
 
         logger.info("Deduplicating raw posts")
         existing_post_ids = get_existing_ids(conn, "fact_posts", "id")
@@ -51,8 +56,6 @@ def run_pipeline() -> None:
             fact_columns=FACT_POSTS_COLUMNS,
             dim_columns=DIM_SUBREDDITS_COLUMNS,
             required_columns=REQUIRED_COLUMNS,
-            existing_post_ids=existing_post_ids,
-            existing_subreddit_ids=existing_subreddit_ids,
         )
 
         logger.info("Starting load")

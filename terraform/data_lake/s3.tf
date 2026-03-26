@@ -2,7 +2,7 @@ terraform {
   backend "s3" {
     bucket = "c22-tsrt-terraform-state"
     key    = "stocksiphon/data_lake/terraform.tfstate"
-    region = var.aws_region
+    region = "eu-west-2"
   }
 }
 

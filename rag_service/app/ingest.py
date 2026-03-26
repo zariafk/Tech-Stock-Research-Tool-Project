@@ -19,28 +19,18 @@ def get_input_data(data_path=None, data=None):
     raise ValueError("Either data_path or data must be provided.")
 
 
-def validate_alpaca_record(record, required_metrics):
-    """Validate that a record has the required fields and at least one metric."""
-
-    # ticker and timestamp are required
-    if (("ticker" not in record)
-        or ("timestamp" not in record)
-        # at least one of the required metrics must be present
-            or (not any(metric in record for metric in required_metrics))):
-        return False
-    return True
-
-
 def convert_to_documents(data, source):
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
 
     for record in data:
-        if source == "alpaca":
-            document = normalise_alpaca_record(record)
+        # if the record is already RAG-ready - only includes RSS for now
+        if "text" in record and "metadata" in record:
+            documents.append(record)
+            continue
 
-        elif source == "rss":
-            document = normalize_rss_record(record)
+        if source == "alpaca":
+            document = normalize_alpaca_summary(record)
 
         elif source == "reddit":
             document = normalize_reddit_record(record)
@@ -55,6 +45,7 @@ def convert_to_documents(data, source):
 
 
 def normalize_alpaca_summary(record) -> dict | None:
+    """Normalize Alpaca stock summary data into a document format."""
     alpaca = record.get("alpaca")
     stock = record.get("stock")
 
@@ -102,7 +93,7 @@ def normalize_alpaca_summary(record) -> dict | None:
         text += f"Change {round(change_pct, 2)} percent. "
 
     return {
-        "id": f"alpaca_{ticker}_{date}",  # IMPORTANT for upsert
+        "id": f"alpaca_{ticker}_{date}",
         "text": text.strip(),
         "metadata": {
             "source": "alpaca",
@@ -114,49 +105,8 @@ def normalize_alpaca_summary(record) -> dict | None:
     }
 
 
-def normalize_rss_record(record) -> dict | None:
-    article = record.get("rss_article")
-    story = record.get("story_stock")
-    stock = record.get("stock")
-
-    if not article or not stock:
-        return None
-
-    ticker = stock.get("ticker")
-    stock_name = stock.get("stock_name")
-
-    title = article.get("title", "")
-    summary = article.get("summary", "")
-    source = article.get("source")
-    published_date = article.get("published_date")
-
-    sentiment = story.get("sentiment_score") if story else None
-    relevance = story.get("relevance_score") if story else None
-    analysis = story.get("analysis") if story else None
-    story_type = story.get("story_type") if story else None
-
-    # Build text (this is what gets embedded)
-    text = f"{title}. {summary}".strip()
-
-    if analysis:
-        text += f" Analysis: {analysis}"
-
-    return {
-        "text": text,
-        "metadata": {
-            "source": "rss",
-            "ticker": ticker,
-            "stock_name": stock_name,
-            "published_date": published_date,
-            "news_source": source,
-            "sentiment": sentiment,
-            "relevance_score": relevance,
-            "story_type": story_type
-        }
-    }
-
-
 def normalize_reddit_record(record) -> dict | None:
+    """Normalize a Reddit post record into a document format."""
     post = record.get("reddit_post")
     stock = record.get("stock")
 

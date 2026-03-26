@@ -9,7 +9,7 @@ def build_document_id(doc):
     source = metadata.get("source", "unknown")
 
     if source == "alpaca":
-        return f"{metadata['ticker']}_{metadata['timestamp']}"
+        return f"alpaca_{metadata['ticker']}_{metadata['date']}"
 
     if source == "rss":
         ticker = metadata.get("ticker", "unknown")

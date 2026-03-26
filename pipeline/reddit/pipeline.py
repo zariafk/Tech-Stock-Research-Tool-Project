@@ -10,7 +10,7 @@ from load import get_secret, get_connection, get_existing_ids, load_main
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RDS_SECRET_NAME = "reddit-pipeline/rds-credentials"
+RDS_SECRET_NAME = "c22-stocksiphon-rds-credentials"
 
 SUBREDDITS = [
     "trading", "stocks", "investing", "stockmarket",

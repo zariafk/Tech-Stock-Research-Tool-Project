@@ -96,3 +96,35 @@ def normalize_rss_record(record):
             "sentiment": metadata.get("sentiment"),
         }
     }
+
+
+def normalize_reddit_record(record):
+    title = record.get("title", "")
+    body = record.get("selftext", "")
+    score = record.get("score")
+    num_comments = record.get("num_comments")
+    created_utc = record.get("created_utc")
+    url = record.get("url")
+    subreddit_id = record.get("subreddit_id")
+
+    if not title:
+        return None
+
+    timestamp = (
+        datetime.utcfromtimestamp(created_utc).isoformat()
+        if created_utc else None
+    )
+
+    text = f"{title}. {body}".strip()
+
+    return {
+        "text": text,
+        "metadata": {
+            "source": "reddit",
+            "timestamp": timestamp,
+            "url": url,
+            "score": score,
+            "num_comments": num_comments,
+            "subreddit_id": subreddit_id
+        }
+    }

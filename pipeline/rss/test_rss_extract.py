@@ -55,7 +55,7 @@ class TestFormatTickerPrompt:
 
     def test_prompt_includes_tickers(self, sample_article):
         """Prompt should list all tickers in the universe."""
-        from rss_extract import format_ticker_prompt
+        from pipeline.rss.rss_analysis import format_ticker_prompt
 
         prompt = format_ticker_prompt(sample_article, ["AAPL", "MSFT"])
         assert "AAPL" in prompt
@@ -63,7 +63,7 @@ class TestFormatTickerPrompt:
 
     def test_prompt_includes_article_content(self, sample_article):
         """Prompt should include title and summary."""
-        from rss_extract import format_ticker_prompt
+        from pipeline.rss.rss_analysis import format_ticker_prompt
 
         prompt = format_ticker_prompt(sample_article, ["AAPL"])
         assert sample_article["title"] in prompt
@@ -71,7 +71,7 @@ class TestFormatTickerPrompt:
 
     def test_prompt_specifies_json_output(self, sample_article):
         """Prompt should request JSON format."""
-        from rss_extract import format_ticker_prompt
+        from pipeline.rss.rss_analysis import format_ticker_prompt
 
         prompt = format_ticker_prompt(sample_article, ["AAPL"])
         assert "JSON" in prompt
@@ -85,14 +85,14 @@ class TestExtractKeywords:
 
     def test_matches_ticker_symbol(self, sample_article):
         """Should match ticker symbols in title/summary."""
-        from rss_extract import extract_keywords
+        from pipeline.rss.rss_analysis import extract_keywords
 
         matches = extract_keywords(sample_article, ["AAPL", "MSFT"])
         assert "AAPL" in matches
 
     def test_matches_company_name(self):
         """Should match company names in title/summary."""
-        from rss_extract import extract_keywords
+        from pipeline.rss.rss_analysis import extract_keywords
 
         entry = {
             "title": "Apple and Microsoft partner",
@@ -104,7 +104,7 @@ class TestExtractKeywords:
 
     def test_case_insensitive_matching(self):
         """Should handle case-insensitive matching."""
-        from rss_extract import extract_keywords
+        from pipeline.rss.rss_analysis import extract_keywords
 
         entry = {
             "title": "APPLE stock rises",
@@ -115,7 +115,7 @@ class TestExtractKeywords:
 
     def test_returns_empty_if_no_matches(self):
         """Should return empty list if no tickers mentioned."""
-        from rss_extract import extract_keywords
+        from pipeline.rss.rss_analysis import extract_keywords
 
         entry = {
             "title": "Weather forecast for London",
@@ -132,7 +132,7 @@ class TestParseRelevanceData:
 
     def test_parses_valid_json_response(self):
         """Should parse valid JSON with all fields."""
-        from rss_extract import parse_relevance_data
+        from pipeline.rss.rss_analysis import parse_relevance_data
 
         response = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "Product launch"}]'
         results = parse_relevance_data(response)
@@ -145,7 +145,7 @@ class TestParseRelevanceData:
 
     def test_filters_scores_below_7(self):
         """Should only return items with score >= 7."""
-        from rss_extract import parse_relevance_data
+        from pipeline.rss.rss_analysis import parse_relevance_data
 
         response = '[{"t": "AAPL", "r": 9, "s": 0.8, "why": "Strong"}, {"t": "MSFT", "r": 5, "s": -0.2, "why": "Weak"}]'
         results = parse_relevance_data(response)
@@ -155,7 +155,7 @@ class TestParseRelevanceData:
 
     def test_handles_malformed_json(self):
         """Should return empty list on JSON parse error."""
-        from rss_extract import parse_relevance_data
+        from pipeline.rss.rss_analysis import parse_relevance_data
 
         response = "This is not valid JSON{}"
         results = parse_relevance_data(response)
@@ -164,7 +164,7 @@ class TestParseRelevanceData:
 
     def test_handles_dict_response(self):
         """Should handle single dict response (not list)."""
-        from rss_extract import parse_relevance_data
+        from pipeline.rss.rss_analysis import parse_relevance_data
 
         response = '{"t": "AAPL", "r": 8, "s": 0.7, "why": "News item"}'
         results = parse_relevance_data(response)
@@ -174,7 +174,7 @@ class TestParseRelevanceData:
 
     def test_strips_markdown_code_blocks(self):
         """Should strip markdown ```json ``` markers."""
-        from rss_extract import parse_relevance_data
+        from pipeline.rss.rss_analysis import parse_relevance_data
 
         response = '```json\n[{"t": "AAPL", "r": 8, "s": 0.7, "why": "News"}]\n```'
         results = parse_relevance_data(response)
@@ -190,7 +190,7 @@ class TestGetTickerAnalysis:
     @patch("rss_extract.CLIENT")
     def test_successful_analysis_on_first_try(self, mock_client, sample_article):
         """Should return analysis on successful OpenAI call."""
-        from rss_extract import get_ticker_analysis
+        from pipeline.rss.rss_analysis import get_ticker_analysis
 
         mock_response = MagicMock()
         mock_response.choices[0].message.content = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "Launch"}]'
@@ -206,7 +206,7 @@ class TestGetTickerAnalysis:
     @patch("rss_extract.CLIENT")
     def test_retries_on_rate_limit(self, mock_client, mock_sleep, sample_article):
         """Should retry with backoff on rate limit error."""
-        from rss_extract import get_ticker_analysis
+        from pipeline.rss.rss_analysis import get_ticker_analysis
 
         # First attempt: rate limit, Second attempt: success
         rate_limit_error = Exception("rate_limit_exceeded")
@@ -225,7 +225,7 @@ class TestGetTickerAnalysis:
     @patch("rss_extract.CLIENT")
     def test_returns_empty_after_max_retries(self, mock_client, sample_article):
         """Should return empty list after exhausting retries."""
-        from rss_extract import get_ticker_analysis
+        from pipeline.rss.rss_analysis import get_ticker_analysis
 
         mock_client.chat.completions.create.side_effect = Exception(
             "rate_limit_exceeded")
@@ -244,7 +244,7 @@ class TestFilterByTicker:
     @patch("rss_extract.CLIENT")
     def test_skips_articles_with_no_keyword_matches(self, mock_client):
         """Should skip articles that don't mention any tickers."""
-        from rss_extract import filter_by_ticker
+        from pipeline.rss.rss_analysis import filter_by_ticker
 
         article = {
             "title": "Weather in London",
@@ -260,7 +260,7 @@ class TestFilterByTicker:
     @patch("rss_extract.CLIENT")
     def test_calls_openai_for_matching_articles(self, mock_client, sample_article):
         """Should call OpenAI for articles with keyword matches."""
-        from rss_extract import filter_by_ticker
+        from pipeline.rss.rss_analysis import filter_by_ticker
 
         mock_response = MagicMock()
         mock_response.choices[0].message.content = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "News"}]'
@@ -280,7 +280,7 @@ class TestCreateDataframe:
 
     def test_empty_list_returns_empty_dataframe(self):
         """Should return empty DataFrame for empty article list."""
-        from rss_extract import create_dataframe
+        from pipeline.rss.rss_analysis import create_dataframe
 
         df = create_dataframe([])
         assert isinstance(df, pd.DataFrame)
@@ -288,7 +288,7 @@ class TestCreateDataframe:
 
     def test_creates_article_id_hash(self, sample_article):
         """Should generate MD5 article_id from link."""
-        from rss_extract import create_dataframe
+        from pipeline.rss.rss_analysis import create_dataframe
 
         article_with_result = sample_article.copy()
         article_with_result.update(
@@ -301,7 +301,7 @@ class TestCreateDataframe:
 
     def test_includes_all_required_columns(self, sample_article):
         """Should include all required columns."""
-        from rss_extract import create_dataframe
+        from pipeline.rss.rss_analysis import create_dataframe
 
         article_with_result = sample_article.copy()
         article_with_result.update(
@@ -316,7 +316,7 @@ class TestCreateDataframe:
 
     def test_converts_published_date_to_datetime(self, sample_article):
         """Should convert published_date to datetime."""
-        from rss_extract import create_dataframe
+        from pipeline.rss.rss_analysis import create_dataframe
 
         article_with_result = sample_article.copy()
         article_with_result.update(
@@ -328,7 +328,7 @@ class TestCreateDataframe:
 
     def test_sorts_by_ticker_and_date(self, sample_article):
         """Should sort by ticker, then by published_date descending."""
-        from rss_extract import create_dataframe
+        from pipeline.rss.rss_analysis import create_dataframe
 
         article1 = sample_article.copy()
         article1.update({"ticker": "AAPL", "score": 9, "sentiment": 0.85,
@@ -352,7 +352,7 @@ class TestDeduplicateRaw:
 
     def test_removes_duplicate_links(self):
         """Should remove articles with duplicate links."""
-        from rss_extract import deduplicate_raw
+        from pipeline.rss.rss_analysis import deduplicate_raw
 
         article = {
             "title": "News",
@@ -368,7 +368,7 @@ class TestDeduplicateRaw:
 
     def test_preserves_unique_articles(self):
         """Should preserve articles with unique links."""
-        from rss_extract import deduplicate_raw
+        from pipeline.rss.rss_analysis import deduplicate_raw
 
         articles = [
             {"title": "A", "link": "https://a.com", "summary": "1",
@@ -385,7 +385,7 @@ class TestDeduplicateRaw:
 
     def test_preserves_first_occurrence(self):
         """Should keep the first occurrence of duplicate."""
-        from rss_extract import deduplicate_raw
+        from pipeline.rss.rss_analysis import deduplicate_raw
 
         article1 = {"title": "First", "link": "https://example.com",
                     "summary": "1", "published_date": "2026-03-26 10:00:00", "source": "tech"}

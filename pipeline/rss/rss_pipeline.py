@@ -1,10 +1,14 @@
 """RSS Pipeline: Extract, Transform, Load (ETL) for Tech News Articles"""
 import json
 
-from rss_extract import extract
+from rss_analysis import analysis
 from rss_transform import transform
 from rss_load import load
 from logger import logger
+from rss_extract_live import (
+    extract_live,
+    RSS_FEEDS
+)
 
 
 def run_rss_pipeline():
@@ -13,7 +17,8 @@ def run_rss_pipeline():
     logger.info("Starting RSS pipeline run.")
 
     # === Extract ===
-    rss_articles = extract()
+    live = extract_live(RSS_FEEDS)
+    rss_articles = analysis(live)
 
     # === Transform ===
     rss_articles = transform(rss_articles)

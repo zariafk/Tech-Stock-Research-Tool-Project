@@ -80,6 +80,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     df = drop_incomplete_rows(df)
     df = normalise_published_date(df)
     df = deduplicate(df)
+    prepare_for_rag(df)
     df = df[REQUIRED_COLUMNS]
     logger.info("Transform complete. %d rows remaining.", len(df))
     return df

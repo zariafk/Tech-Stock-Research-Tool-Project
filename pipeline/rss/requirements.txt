@@ -7,3 +7,4 @@ python-dotenv
 boto3
 pyarrow
 pandas
+psycopg2-binary

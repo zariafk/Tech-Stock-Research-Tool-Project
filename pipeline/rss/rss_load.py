@@ -1,115 +1,156 @@
-"""Load transformed RSS articles to S3.
+"""Load transformed RSS articles to PostgreSQL RDS.
 
-Strategy: Ticker + Day partitioned Parquet files.
-  s3://{bucket}/rss/{ticker}/dt=YYYY-MM-DD/articles.parquet
+Inserts into:
+  - rss_article: title, link, summary, published_date, source
+  - story_stock: stock_id, sentiment_score, relevance_score, analysis, story_type='rss'
 
-On each Lambda run:
-  1. For each ticker in the batch:
-     a. Download existing Parquet from S3 (if it exists).
-     b. Merge with the new batch.
-     c. Deduplicate by article_id (cross-run deduplication).
-     d. Re-upload the merged file.
-
-Cost: 1 GET + 1 PUT per ticker per Lambda run — minimal S3 cost.
+Deduplication: ON CONFLICT on link (unique article = unique link).
 """
 
+import json
 import os
-import io
-from datetime import datetime, timezone
+import psycopg2
+import psycopg2.extras
 import pandas as pd
 import boto3
 from logger import logger
 
-S3_BUCKET = os.environ.get('S3_BUCKET')
-S3_PREFIX = 'rss'
+
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieve DB credentials from AWS Secrets Manager."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
 
 
-def get_s3_key(ticker: str, date: datetime) -> str:
-    """Build S3 key for ticker + date partition."""
-    return f"{S3_PREFIX}/{ticker}/dt={date.strftime('%Y-%m-%d')}/articles.parquet"
+def get_connection():
+    """Connect to RDS PostgreSQL. Uses env vars for local dev, Secrets Manager for prod."""
+    if os.environ.get("DB_HOST"):
+        return psycopg2.connect(
+            host=os.environ["DB_HOST"],
+            port=os.environ.get("DB_PORT", 5432),
+            dbname=os.environ["DB_NAME"],
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
+        )
+
+    # Fall back to Secrets Manager (Lambda / prod)
+    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    return psycopg2.connect(
+        host=secret["host"],
+        port=secret.get("port", 5432),
+        dbname=secret["dbname"],
+        user=secret["username"],
+        password=secret["password"],
+    )
 
 
-def download_existing(client, bucket: str, key: str) -> pd.DataFrame:
-    """Download existing Parquet from S3. Returns empty DataFrame if not found."""
-    try:
-        response = client.get_object(Bucket=bucket, Key=key)
-        existing = pd.read_parquet(io.BytesIO(response['Body'].read()))
-        logger.info(
-            "Downloaded %d existing articles from s3://%s/%s", len(existing), bucket, key)
-        return existing
-    except Exception as e:
-        if hasattr(e, 'response') and e.response['Error']['Code'] == 'NoSuchKey':
-            logger.info("No existing file at %s — starting fresh.", key)
-            return pd.DataFrame()
-        raise
+def get_tickers_from_db(conn) -> dict:
+    """Read ticker → stock_name mapping from the stock table."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT stock_id, ticker, stock_name FROM stock")
+        rows = cur.fetchall()
+    # { ticker: { stock_id, stock_name } }
+    return {
+        row[1]: {"stock_id": row[0], "stock_name": row[2]}
+        for row in rows
+    }
 
 
-def upload(client, bucket: str, key: str, df: pd.DataFrame) -> None:
-    """Upload DataFrame as Parquet to S3."""
-    buffer = io.BytesIO()
-    df.to_parquet(buffer, index=False, engine='pyarrow')
-    buffer.seek(0)
-    client.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue())
-    logger.info("Uploaded %d articles to s3://%s/%s", len(df), bucket, key)
+def load(df: pd.DataFrame) -> int:
+    """Insert articles into rss_article and story_stock tables.
 
-
-def load(df: pd.DataFrame, bucket: str = None, date: datetime = None) -> int:
-    """Load articles grouped by ticker. Merge with existing S3 partitions and deduplicate.
-
-    Returns the total number of net new articles uploaded across all tickers.
+    Returns the number of net new articles inserted.
     """
-    bucket = bucket or S3_BUCKET
-    if not bucket:
-        raise ValueError("S3_BUCKET environment variable is not set.")
-
     if df.empty:
         logger.warning("No articles to load.")
         return 0
 
-    date = date or datetime.now(timezone.utc)
-    client = boto3.client('s3')
+    conn = get_connection()
     total_net_new = 0
 
-    # Group by ticker and upload separately
-    for ticker, ticker_df in df.groupby('ticker'):
-        key = get_s3_key(ticker, date)
+    try:
+        # Build ticker → stock_id lookup
+        stock_lookup = get_tickers_from_db(conn)
 
-        # Download existing partition for this ticker+date
-        existing = download_existing(client, bucket, key)
+        with conn.cursor() as cur:
+            for _, row in df.iterrows():
+                ticker = row["ticker"]
 
-        # Merge and deduplicate by article_id
-        if not existing.empty:
-            combined = pd.concat([existing, ticker_df], ignore_index=True)
-        else:
-            combined = ticker_df.copy()
+                # Skip if ticker not in stock table
+                if ticker not in stock_lookup:
+                    logger.warning(
+                        "Ticker %s not found in stock table — skipping.", ticker)
+                    continue
 
-        before = len(combined)
-        combined = combined.drop_duplicates(
-            subset=['article_id'], keep='first')
-        net_new = len(combined) - len(existing)
-        total_net_new += net_new
+                stock_id = stock_lookup[ticker]["stock_id"]
 
-        logger.info(
-            "[%s] Deduplication: %d duplicates removed. %d net new articles.", ticker, before - len(combined), net_new)
+                # Insert into rss_article; skip duplicates via unique link
+                cur.execute(
+                    """
+                    INSERT INTO rss_article (title, link, summary, published_date, source)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (link) DO NOTHING
+                    RETURNING story_id
+                    """,
+                    (
+                        row["title"],
+                        row["link"],
+                        row["summary"],
+                        row["published_date"],
+                        row["source"],
+                    ),
+                )
 
-        # Re-upload merged partition
-        upload(client, bucket, key, combined)
+                result = cur.fetchone()
+                if result is None:
+                    # Duplicate — already exists
+                    continue
+
+                story_id = result[0]
+
+                # Insert into story_stock with story_type = 'rss'
+                cur.execute(
+                    """
+                    INSERT INTO story_stock
+                        (story_id, stock_id, sentiment_score, relevance_score, analysis, story_type)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        story_id,
+                        stock_id,
+                        row.get("sentiment"),
+                        row.get("score"),
+                        row.get("analysis"),
+                        "rss",
+                    ),
+                )
+                total_net_new += 1
+
+        conn.commit()
+        logger.info("Loaded %d net new articles into RDS.", total_net_new)
+
+    except Exception:
+        conn.rollback()
+        logger.error("Load failed — transaction rolled back.", exc_info=True)
+        raise
+    finally:
+        conn.close()
 
     return total_net_new
 
 
-if __name__ == '__main__':
-    # Local test: load from the most recent test CSV
+if __name__ == "__main__":
     import glob
     import dotenv
     dotenv.load_dotenv()
 
-    csv_files = sorted(glob.glob('test_results_*.csv'))
+    csv_files = sorted(glob.glob("test_results_*.csv"))
     if not csv_files:
         print("No test CSV found. Run rss_extract.py first.")
     else:
         latest = csv_files[-1]
         df = pd.read_csv(latest)
-        print("Loaded %d articles from %s", len(df), latest)
+        print(f"Loaded {len(df)} articles from {latest}")
         net_new = load(df)
-        print("Net new articles uploaded to S3: %d", net_new)
+        print(f"Net new articles inserted into RDS: {net_new}")

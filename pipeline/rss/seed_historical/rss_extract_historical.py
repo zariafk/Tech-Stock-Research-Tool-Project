@@ -13,7 +13,7 @@ from logger import logger
 # Constants for API configuration and lookback window
 ALGOLIA_HN_URL = 'https://hn.algolia.com/api/v1/search'
 # HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
-HN_MAX_RESULTS = 2   # Filter for top-relevance hits to manage LLM token costs
+HN_MAX_RESULTS = 10   # Filter for top-relevance hits to manage LLM token costs
 
 
 def get_hn_historical(company_name: str) -> list[dict]:

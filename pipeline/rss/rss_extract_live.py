@@ -74,3 +74,4 @@ def extract_live(feeds: dict) -> list[dict]:
 
     logger.info('LIVE: Extracted %d live articles total', len(articles))
     return articles
+

@@ -1,13 +1,9 @@
-"""Extract orchestrator combining
-live and historical sources."""
+"""OpenAI-powered analysis of RSS articles for ticker relevance and sentiment."""
 
-from rss_extract_historical import (
+from seed_historical.rss_extract_historical import (
     extract_historical
 )
-from rss_extract_live import (
-    extract_live,
-    RSS_FEEDS
-)
+
 from openai import OpenAI
 import os
 import dotenv
@@ -31,19 +27,33 @@ CLIENT = OpenAI(
 
 
 def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
-    """Format OpenAI prompt for relevance score into JSON."""
     return f"""
-    Act as: Quant Research Assistant.
+    Act as: Senior Quant Analyst.
     Universe: {", ".join(tickers)}
     Input: "{entry['title']}" | "{entry['summary']}"
-    
-    Task: Extract ticker-specific signals.
-    Metrics: 
-    - Relevance (0-10, only return if 7+)
-    - Sentiment (-1.0 to 1.0, where 0 is neutral)
-    
-    Output: JSON list only. 
-    Format: [{{"t": "TICKER", "r": 9, "s": 0.85, "why": "one sentence"}}]
+
+    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
+
+    Relevance Rubric:
+    - 10: Direct idiosyncratic event (Earnings, M&A).
+    - 8: Significant business news (New product, contract).
+    - 7: Indirect impact (Competitor/Sector news).
+    - <7: Ignore.
+
+    Sentiment Rubric (Strictly use these values):
+    - 1.0: Transformational positive news.
+    - 0.5: Incremental/Standard positive news.
+    - 0.0: Neutral/Mixed news.
+    - -0.5: Incremental negative news.
+    - -1.0: Catastrophic negative news.
+
+    Output Format (JSON list):
+    [{{
+      "t": "TICKER",
+      "r": [score],
+      "s": [score],
+      "why": "one sentence justification"
+    }}]
     """
 
 
@@ -78,7 +88,7 @@ def parse_relevance_data(response: str) -> list[dict]:
 
         results = []
         for item in data:
-            # We filter for r >= 7 as per yours/user instructions
+            # Filter for r >= 7
             if item.get('r', 0) >= 7:
                 results.append({
                     "ticker": item.get('t'),
@@ -93,7 +103,7 @@ def parse_relevance_data(response: str) -> list[dict]:
 
 
 def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -> list[dict]:
-    """Analyze high-potential articles with OpenAI. 
+    """Analyze high-potential articles with OpenAI.
     Retries with exponential backoff on rate limits."""
     prompt = format_ticker_prompt(entry, tickers)
 
@@ -195,19 +205,23 @@ def deduplicate_raw(articles: list[dict]) -> list[dict]:
     return unique
 
 
-def extract(tickers: list[str] = None) -> pd.DataFrame:
-    """Extract live and historical articles."""
+def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
+    """Extract live and historical articles.
+
+    articles can be extract_live(RSS_FEEDS)
+    OR extract_historical(TICKER_COMPANIES)
+    """
     if tickers is None:
         tickers = TECH_TICKERS
 
     logger.info('Starting extraction for %d tickers.', len(tickers))
 
     # Fetch sources
-    live = extract_live(RSS_FEEDS)
-    historical = extract_historical(TICKER_COMPANIES)
+    # live = extract_live(RSS_FEEDS)
+    # historical = extract_historical(TICKER_COMPANIES)
 
     # Deduplicate BEFORE expensive OpenAI filtering
-    raw_articles = deduplicate_raw(live + historical)
+    raw_articles = deduplicate_raw(articles)
     logger.info('Combined into %d unique articles.', len(raw_articles))
 
     # Filter by ticker
@@ -218,8 +232,7 @@ def extract(tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    # Run a test extraction
-    df = extract()
+    df = extract(extract_historical(TICKER_COMPANIES))
 
     # Store locally for testing as requested
     if not df.empty:

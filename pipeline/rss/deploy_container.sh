@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-
 # Load from environment variables (set in CI/CD or export before running)
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?Error: AWS_ACCOUNT_ID not set}"
 REGION="${AWS_REGION:-eu-west-2}"

@@ -314,7 +314,7 @@ def transform_stock_bars(raw_bars_df, valid_symbols):
         datetime_columns=["bar_timestamp", "bar_date", "ingestion_time"],
         numeric_columns=["open", "high", "low",
                          "close", "volume", "trade_count", "vwap"],
-        duplicate_subset_columns=["symbol", "bar_timestamp", "volume"],
+        duplicate_subset_columns=["symbol", "bar_timestamp"],
         validation_function=validate_stock_bar_row,
         valid_symbols=valid_symbols,
         sort_columns=["symbol", "bar_timestamp"]

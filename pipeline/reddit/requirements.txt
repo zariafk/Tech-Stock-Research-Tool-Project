@@ -2,3 +2,4 @@ requests
 pandas
 pytest
 boto3
+pyarrow

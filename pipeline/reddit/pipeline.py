@@ -62,14 +62,17 @@ def main():
     logger.info("Pipeline complete")
 
 
-if __name__ == "__main__":
-
+def lambda_handler(event, context):
     main()
+
+
+if __name__ == "__main__":
+    lambda_handler(None, None)
 
     # bucket = "c22-tsrt-terraform-state"
     # key = "global/secrets_repository/terraform.tfstate"
 
 # resource "aws_secretsmanager_secret" "reddit_pipeline" {
-#     name = "reddit-pipeline/s3-credentials"
+#     name = "c22-trade-research-tool-secrets"
 #     description = "S3 credentials and bucket name for the Reddit ETL pipeline"
 # }

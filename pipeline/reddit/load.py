@@ -72,6 +72,15 @@ def insert_dataframe(
     logger.info("Inserted %d rows into %s", len(rows), table)
 
 
+def join_tables_to_json(
+    fact_posts: pd.DataFrame,
+    dim_subreddits: pd.DataFrame,
+) -> list[dict]:
+    """Joins fact_posts and dim_subreddits and returns the result as a list of dicts."""
+    joined = fact_posts.merge(dim_subreddits, on="subreddit_id", how="left")
+    return joined.to_dict(orient="records")
+
+
 def load_main(
     tables: dict[str, pd.DataFrame],
     *,

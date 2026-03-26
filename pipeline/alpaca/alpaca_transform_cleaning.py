@@ -1,3 +1,5 @@
+"""Module for transforming, cleaning, and validating Alpaca stock data."""
+
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -20,8 +22,7 @@ def convert_datetime_columns(df, datetime_columns):
             cleaned_df[column] = pd.to_datetime(
                 cleaned_df[column],
                 errors="coerce",
-                utc=True
-            )
+                utc=True)
 
     return cleaned_df
 

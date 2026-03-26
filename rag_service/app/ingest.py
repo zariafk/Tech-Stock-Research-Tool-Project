@@ -18,37 +18,63 @@ def get_input_data(data_path=None, data=None):
     raise ValueError("Either data_path or data must be provided.")
 
 
-def normalise_alpaca_data(data):
+def validate_alpaca_record(record, required_metrics):
+    """Validate that a record has the required fields and at least one metric."""
+
+    # ticker and timestamp are required
+    if (("ticker" not in record)
+        or ("timestamp" not in record)
+        # at least one of the required metrics must be present
+            or (not any(metric in record for metric in required_metrics))):
+        return False
+    return True
+
+
+def convert_to_documents(data, source):
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
     required_metrics = ["open", "high", "low", "close", "volume"]
 
     for record in data:
-        # ticker and timestamp are required
-        if "ticker" not in record or "timestamp" not in record:
-            continue
+        if source == "alpaca":
+            text = normalise_alpaca_record(record)
 
-        # at least one metric must be present
-        if not any(metric in record for metric in required_metrics):
-            continue
+            if text == "":
+                continue
 
-        text = f"Stock {record['ticker']} at {record['timestamp']}"
+            documents.append({
+                "text": text,
+                "metadata": {
+                    "source": "alpaca",
+                    "ticker": record["ticker"],
+                    "timestamp": record["timestamp"]
+                }
+            })
 
-        for required_metric in required_metrics:
-            if required_metric in record:
-                text += f", {required_metric} {record[required_metric]}"
+        elif source == "rss":
+            document = normalize_rss_record(record)
 
-        text += "."
-
-        documents.append({
-            "text": text,
-            "metadata": {
-                "ticker": record["ticker"],
-                "timestamp": record["timestamp"]
-            }
-        })
+            if document["text"]:
+                documents.append(document)
 
     return documents
+
+
+def normalise_alpaca_record(record) -> str:
+    """Convert raw Alpaca stock data into a standardized document format."""
+    required_metrics = ["open", "high", "low", "close", "volume"]
+
+    if not validate_alpaca_record(record, required_metrics):
+        return ""
+
+    text = f"Stock {record['ticker']} at {record['timestamp']}"
+
+    for required_metric in required_metrics:
+        if required_metric in record:
+            text += f", {required_metric} {record[required_metric]}"
+
+    text += "."
+    return text
 
 
 def normalize_rss_record(record):
@@ -56,6 +82,7 @@ def normalize_rss_record(record):
     title = record.get("title", "")
     summary = record.get("summary", "")
     url = record.get("url", "")
+    ticker = record.get("ticker")
 
     text = f"{title}. {summary}"
 
@@ -63,6 +90,7 @@ def normalize_rss_record(record):
         "text": text.strip(),
         "metadata": {
             "source": "rss",
+            "ticker": ticker,
             "url": url
         }
     }

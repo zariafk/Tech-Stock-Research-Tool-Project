@@ -37,35 +37,29 @@ def convert_to_documents(data, source):
 
     for record in data:
         if source == "alpaca":
-            text = normalise_alpaca_record(record)
-
-            if text == "":
-                continue
-
-            documents.append({
-                "text": text,
-                "metadata": {
-                    "source": "alpaca",
-                    "ticker": record["ticker"],
-                    "timestamp": record["timestamp"]
-                }
-            })
+            document = normalise_alpaca_record(record)
 
         elif source == "rss":
             document = normalize_rss_record(record)
 
-            if document is not None:
-                documents.append(document)
+        elif source == "reddit":
+            document = normalize_reddit_record(record)
+
+        else:
+            continue
+
+        if document is not None:
+            documents.append(document)
 
     return documents
 
 
-def normalise_alpaca_record(record) -> str:
+def normalise_alpaca_record(record) -> dict | None:
     """Convert raw Alpaca stock data into a standardized document format."""
     required_metrics = ["open", "high", "low", "close", "volume"]
 
     if not validate_alpaca_record(record, required_metrics):
-        return ""
+        return None
 
     text = f"Stock {record['ticker']} at {record['timestamp']}"
 
@@ -74,10 +68,18 @@ def normalise_alpaca_record(record) -> str:
             text += f", {required_metric} {record[required_metric]}"
 
     text += "."
-    return text
+
+    return {
+        "text": text,
+        "metadata": {
+            "source": "alpaca",
+            "ticker": record["ticker"],
+            "timestamp": record["timestamp"]
+        }
+    }
 
 
-def normalize_rss_record(record):
+def normalize_rss_record(record) -> dict | None:
     """Convert raw RSS feed data into a standardized document format."""
     text = record.get("text", "").strip()
     metadata = record.get("metadata", {})
@@ -98,7 +100,7 @@ def normalize_rss_record(record):
     }
 
 
-def normalize_reddit_record(record):
+def normalize_reddit_record(record) -> dict | None:
     title = record.get("title", "")
     body = record.get("selftext", "")
     score = record.get("score")

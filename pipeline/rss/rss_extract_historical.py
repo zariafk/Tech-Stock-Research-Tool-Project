@@ -12,7 +12,7 @@ from logger import logger
 
 # Constants for API configuration and lookback window
 ALGOLIA_HN_URL = 'https://hn.algolia.com/api/v1/search'
-HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
+# HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
 HN_MAX_RESULTS = 2   # Filter for top-relevance hits to manage LLM token costs
 
 
@@ -21,8 +21,8 @@ def get_hn_historical(company_name: str) -> list[dict]:
     Fetches high-engagement 'Stories' from Hacker News within a specific lookback period.
     Uses 'Points' as a proxy for community validation/impact.
     """
-    # Define start of lookback period
-    past_date = datetime.now() - timedelta(days=(365 * HN_HISTORY_YEARS))
+    # Define start of lookback period (fixed to January 1, 2024)
+    past_date = datetime(2024, 1, 1)
     timestamp = int(past_date.timestamp())
 
     # Filter for 'story' tags only and use company name as the query for better relevance on HN

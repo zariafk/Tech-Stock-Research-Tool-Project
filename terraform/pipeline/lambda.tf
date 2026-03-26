@@ -1,28 +1,3 @@
-
-terraform {
-  backend "s3" {
-    bucket = "c22-tsrt-terraform-state"
-    key    = "stocksiphon/pipeline/terraform.tfstate"
-    region = var.aws_region
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-resource "aws_ecr_repository" "c22_stocksiphon_rss_ecr" {
-  name = "c22-stocksiphon-rss-ecr"
-}
-
-resource "aws_ecr_repository" "c22_stocksiphon_alpaca_ecr" {
-  name = "c22-stocksiphon-alpaca-ecr"
-}
-
-resource "aws_ecr_repository" "c22_stocksiphon_reddit_ecr" {
-  name = "c22-stocksiphon-reddit-ecr"
-}
-
 resource "aws_lambda_function" "c22_stocksiphon_rss_lambda" {
   function_name = "c22-stocksiphon-rss-lambda"
   role          = aws_iam_role.c22_stocksiphon_lambda_role.arn

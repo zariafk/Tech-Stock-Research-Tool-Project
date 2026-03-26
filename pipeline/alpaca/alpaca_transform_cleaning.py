@@ -1,9 +1,9 @@
 import pandas as pd
 from dotenv import load_dotenv
 
-from pipeline.alpaca_pipeline.alpaca.alpaca_extract import extract_all_stock_data
-from pipeline.alpaca_pipeline.alpaca.top_100_tech_companies import tech_universe
-from pipeline.alpaca_pipeline.alpaca.logger import logger
+from alpaca_extract import extract_all_stock_data
+from top_100_tech_companies import tech_universe
+from logger import logger
 
 load_dotenv()
 

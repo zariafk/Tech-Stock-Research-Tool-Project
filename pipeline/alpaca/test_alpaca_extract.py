@@ -6,7 +6,7 @@ import pytest
 import requests
 
 
-from pipeline.alpaca_pipeline.alpaca.alpaca_extract import (
+from alpaca_extract import (
     make_request,
     validate_symbols,
     build_bars_params,
@@ -155,7 +155,7 @@ def test_parse_bar_row_returns_expected_row(aapl_raw_bar):
     expected = {
         "symbol": "AAPL",
         "bar_timestamp": "2026-03-24T00:00:00Z",
-        "bar_date": "2026-03-24T00:00:00Z",
+        "bar_date": "2026-03-24",
         "open": 210.0,
         "high": 215.0,
         "low": 208.0,
@@ -178,12 +178,12 @@ def test_parse_snapshot_row_returns_expected_row(aapl_raw_snapshot):
         "snapshot_time": "2026-03-25T11:30:00",
         "latest_trade_price": 220.5,
         "previous_close": 217.8,
-        "daily_open": 218.0,
-        "daily_high": 221.0,
-        "daily_low": 217.5,
-        "daily_volume": 500000,
-        "daily_vwap": 219.4,
-        "daily_trade_count": 14000,
+        "current_day_open": 218.0,
+        "current_day_high": 221.0,
+        "current_day_low": 217.5,
+        "current_day_volume": 500000,
+        "current_day_vwap": 219.4,
+        "current_day_trade_count": 14000,
         "ingestion_time": "2026-03-25T12:00:00",
     }
 

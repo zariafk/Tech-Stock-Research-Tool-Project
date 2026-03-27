@@ -13,7 +13,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def build_context(retrieved_docs: list) -> str:
     """Build a context string from the retrieved documents."""
-    return "\n".join(retrieved_docs)
+    return "\n".join([doc["text"] for doc in retrieved_docs])
 
 
 def generate_chat_prompt(query: str, context: str) -> str:

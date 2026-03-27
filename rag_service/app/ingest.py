@@ -34,7 +34,12 @@ def convert_to_documents(data: list, source: str) -> list:
             continue
 
         if source == "alpaca":
-            document = normalize_alpaca_summary(record)
+            if "latest_time" in record:
+                document = normalize_alpaca_live_record(record)
+            elif "bar_date" in record:
+                document = normalize_alpaca_historical_record(record)
+            else:
+                continue
 
         elif source == "reddit":
             document = normalize_reddit_record(record)

@@ -1,0 +1,10 @@
+feedparser
+pytest
+requests
+logger
+openai
+python-dotenv
+boto3
+pyarrow
+pandas
+psycopg2-binary

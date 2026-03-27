@@ -11,8 +11,8 @@ REPO=c22-stocksiphon-query-lambda
 docker buildx build --platform linux/amd64 --provenance=false -f dockerfile.query \
 -t stocksiphon-rag-query:latest .
 
-# create repo
-aws ecr create-repository --repository-name $REPO --region $REGION
+# create repo (or updates latest tag if repo already exists)
+aws ecr create-repository --repository-name $REPO --region $REGION || true
 
 # authenticate Docker to ECR
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com

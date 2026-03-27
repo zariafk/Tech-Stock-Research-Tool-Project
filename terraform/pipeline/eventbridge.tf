@@ -25,8 +25,7 @@ resource "aws_iam_role_policy" "c22_stocksiphon_scheduler_lambda_policy" {
       Action   = ["lambda:InvokeFunction"]
       Resource = [
         aws_lambda_function.c22_stocksiphon_rss_lambda.arn,
-        aws_lambda_function.c22_stocksiphon_alpaca_lambda.arn,
-        aws_lambda_function.c22_stocksiphon_reddit_lambda.arn
+        aws_lambda_function.c22_stocksiphon_alpaca_lambda.arn
       ]
     }]
   })

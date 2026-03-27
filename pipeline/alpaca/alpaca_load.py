@@ -2,7 +2,6 @@
 
 import os
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg2
@@ -21,12 +20,16 @@ LIVE_COLUMNS = [
     "close", "volume", "trade_count", "vwap",]
 
 
+SSL_CERT_PATH = os.path.join(os.path.dirname(__file__), "global-bundle.pem")
+
+
 def get_rds_connection():
     """Open a new psycopg2 connection using credentials from the environment."""
     connection = psycopg2.connect(
         host=os.environ["RDS_HOST"], port=os.environ.get("RDS_PORT", "5432"),
         dbname=os.environ["RDS_DB"], user=os.environ["RDS_USER"],
-        password=os.environ["RDS_PASSWORD"])
+        password=os.environ["RDS_PASSWORD"],
+        sslmode="verify-full", sslrootcert=SSL_CERT_PATH)
 
     return connection
 
@@ -163,26 +166,20 @@ def load_alpaca_history(connection, cleaned_history_df: pd.DataFrame,
 
 
 def get_live_window_start() -> datetime:
-    """Return the UTC timestamp of the most recent 12:00 UK noon.
+    """Return the UTC timestamp exactly 24 hours before now.
 
-    The live table holds data for a single trading window that resets
-    every day at 12:00 Europe/London.  If it is currently before noon
-    UK time the window started at yesterday's noon; otherwise it started
-    at today's noon.
+    The live table uses a rolling 24-hour window so that at any point
+    in time the table holds the previous day's data plus today's data
+    up to the current moment.
     """
-    now_uk = datetime.now(ZoneInfo("Europe/London"))
-    noon_today_uk = now_uk.replace(hour=12, minute=0, second=0, microsecond=0)
-    window_start_uk = noon_today_uk - \
-        timedelta(days=1) if now_uk < noon_today_uk else noon_today_uk
-    return window_start_uk.astimezone(timezone.utc)
+    return datetime.now(timezone.utc) - timedelta(hours=24)
 
 
 def delete_stale_live_rows(connection) -> int:
-    """Delete all alpaca_live rows that fall before the current live window.
+    """Delete all alpaca_live rows older than the rolling 24-hour window.
 
-    The live window resets every day at 12:00 UK time.  Any rows with
-    latest_time before that cutoff belong to a previous session and are
-    removed so only the current day's data remains.
+    Any rows with latest_time more than 24 hours ago are removed so the
+    table always holds roughly one day of live data per ticker.
     """
     window_start_utc = get_live_window_start()
 
@@ -291,11 +288,11 @@ def load_all_to_rds(cleaned_data: dict[str, pd.DataFrame],
 
         logger.info(
             "Finished full Alpaca RDS load workflow. History rows: %d, Live rows: %d",
-            history_inserted, live_inserted,
-        )
+            history_inserted, live_inserted,)
+
         return {"history_rows_inserted": history_inserted, "live_rows_inserted": live_inserted}
 
-    except Exception as error:
+    except psycopg2.Error as error:
         logger.exception("Alpaca RDS load workflow failed: %s", error)
         raise
 

@@ -172,6 +172,21 @@ def validate_latest_bar_price_relationships(row: pd.Series) -> str:
     return "valid"
 
 
+def validate_numeric_fields(
+        row: pd.Series,
+        fields: list[tuple[str, bool]]) -> str:
+    """Validate multiple numeric fields in one pass.
+
+    Each entry in fields is (column_name, allow_zero).
+    Returns the first failure reason, or 'valid' if all pass.
+    """
+    for column_name, allow_zero in fields:
+        result = validate_number(row[column_name], column_name, allow_zero)
+        if result != "valid":
+            return result
+    return "valid"
+
+
 def validate_stock_bar_row(row: pd.Series,
                            valid_symbols: list[str]) -> str:
     """Validate one stock bar row."""
@@ -179,12 +194,9 @@ def validate_stock_bar_row(row: pd.Series,
     checks = [
         validate_symbol(row["ticker"], valid_symbols),
         validate_timestamp(row["bar_date"], "bar_date"),
-        validate_number(row["open"], "open", allow_zero=False),
-        validate_number(row["high"], "high", allow_zero=False),
-        validate_number(row["low"], "low", allow_zero=False),
-        validate_number(row["close"], "close", allow_zero=False),
-        validate_number(row["volume"], "volume", allow_zero=True),
-        validate_number(row["trade_count"], "trade_count", allow_zero=True),
+        validate_numeric_fields(row, [
+            ("open", False), ("high", False), ("low", False), ("close", False),
+            ("volume", True), ("trade_count", True),]),
         validate_bar_price_relationships(row),
         validate_vwap_against_range(row["vwap"], row["low"], row["high"], "vwap")]
 
@@ -202,13 +214,9 @@ def validate_stock_latest_bar_row(row: pd.Series,
     checks = [
         validate_symbol(row["ticker"], valid_symbols),
         validate_timestamp(row["latest_time"], "latest_time"),
-        validate_number(row["open"], "open", allow_zero=False),
-        validate_number(row["high"], "high", allow_zero=False),
-        validate_number(row["low"], "low", allow_zero=False),
-        validate_number(row["close"], "close", allow_zero=False),
-        validate_number(row["close"], "close", allow_zero=False),
-        validate_number(row["volume"], "volume", allow_zero=True),
-        validate_number(row["trade_count"], "trade_count", allow_zero=True),
+        validate_numeric_fields(row, [
+            ("open", False), ("high", False), ("low", False), ("close", False),
+            ("volume", True), ("trade_count", True),]),
         validate_latest_bar_price_relationships(row),
         validate_vwap_against_range(row["vwap"], row["low"], row["high"], "vwap")]
 

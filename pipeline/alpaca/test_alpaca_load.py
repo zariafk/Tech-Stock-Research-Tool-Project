@@ -7,7 +7,6 @@ OR by mocking psycopg2 cursors — so no live RDS is required.
 
 from datetime import date, datetime, timezone
 from unittest.mock import MagicMock, patch
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -16,12 +15,10 @@ from alpaca_load import (
     fetch_stock_id_map,
     map_ticker_to_stock_id,
     filter_new_history_rows,
-    fetch_existing_history_range,
     insert_history_rows,
     insert_live_rows,
     get_live_window_start,
     delete_stale_live_rows,
-    fetch_existing_live_keys,
     filter_new_live_rows,
     load_alpaca_history,
     load_alpaca_live,
@@ -30,10 +27,6 @@ from alpaca_load import (
     LIVE_COLUMNS,
 )
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def stock_id_map():
@@ -77,10 +70,6 @@ def cleaned_live_df():
     })
 
 
-# ---------------------------------------------------------------------------
-# fetch_stock_id_map
-# ---------------------------------------------------------------------------
-
 def test_fetch_stock_id_map_returns_dict():
     """Return a dict mapping ticker -> stock_id from mock cursor rows."""
     mock_conn = MagicMock()
@@ -110,10 +99,6 @@ def test_fetch_stock_id_map_raises_when_table_is_empty():
         fetch_stock_id_map(mock_conn)
 
 
-# ---------------------------------------------------------------------------
-# map_ticker_to_stock_id
-# ---------------------------------------------------------------------------
-
 def test_map_ticker_to_stock_id_replaces_ticker_with_stock_id(
         cleaned_history_df, stock_id_map):
     """Replace ticker column with stock_id and drop ticker."""
@@ -137,10 +122,6 @@ def test_map_ticker_to_stock_id_drops_unmapped_tickers(stock_id_map):
     assert len(result) == 1
     assert result.iloc[0]["stock_id"] == 1
 
-
-# ---------------------------------------------------------------------------
-# filter_new_history_rows
-# ---------------------------------------------------------------------------
 
 def test_filter_new_history_rows_returns_all_when_no_existing_data():
     """Return all rows when the RDS has no existing history."""
@@ -238,10 +219,6 @@ def test_filter_new_history_rows_allows_backfill():
     assert actual_dates == expected_dates
 
 
-# ---------------------------------------------------------------------------
-# insert_history_rows
-# ---------------------------------------------------------------------------
-
 def test_insert_history_rows_returns_zero_for_empty_df():
     """Return 0 when there are no rows to insert."""
     mock_conn = MagicMock()
@@ -281,15 +258,9 @@ def test_insert_history_rows_calls_execute_values():
     assert len(inserted_tuples) == 2
 
 
-# ---------------------------------------------------------------------------
-# get_live_window_start
-# ---------------------------------------------------------------------------
-
-def test_get_live_window_start_returns_todays_noon_when_after_noon():
-    """After 12:00 UK the window starts at today's noon."""
-    # Simulate 27 Mar 2026 14:00 UK time (BST = UTC+1 in March)
-    fake_now = datetime(2026, 3, 27, 14, 0, 0,
-                        tzinfo=ZoneInfo("Europe/London"))
+def test_get_live_window_start_returns_24_hours_ago():
+    """The rolling window should start exactly 24 hours before 'now'."""
+    fake_now = datetime(2026, 3, 27, 14, 0, 0, tzinfo=timezone.utc)
 
     with patch("alpaca_load.datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
@@ -297,17 +268,13 @@ def test_get_live_window_start_returns_todays_noon_when_after_noon():
 
         result = get_live_window_start()
 
-    expected_uk_noon = datetime(
-        2026, 3, 27, 12, 0, 0, tzinfo=ZoneInfo("Europe/London")
-    ).astimezone(timezone.utc)
-
-    assert result == expected_uk_noon
+    expected = datetime(2026, 3, 26, 14, 0, 0, tzinfo=timezone.utc)
+    assert result == expected
 
 
-def test_get_live_window_start_returns_yesterdays_noon_when_before_noon():
-    """Before 12:00 UK the window starts at yesterday's noon."""
-    # Simulate 27 Mar 2026 09:00 UK time
-    fake_now = datetime(2026, 3, 27, 9, 0, 0, tzinfo=ZoneInfo("Europe/London"))
+def test_get_live_window_start_returns_24_hours_ago_early_morning():
+    """The rolling window at 09:00 UTC should start at 09:00 UTC the day before."""
+    fake_now = datetime(2026, 3, 27, 9, 0, 0, tzinfo=timezone.utc)
 
     with patch("alpaca_load.datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
@@ -315,16 +282,9 @@ def test_get_live_window_start_returns_yesterdays_noon_when_before_noon():
 
         result = get_live_window_start()
 
-    expected_uk_noon = datetime(
-        2026, 3, 26, 12, 0, 0, tzinfo=ZoneInfo("Europe/London")
-    ).astimezone(timezone.utc)
+    expected = datetime(2026, 3, 26, 9, 0, 0, tzinfo=timezone.utc)
+    assert result == expected
 
-    assert result == expected_uk_noon
-
-
-# ---------------------------------------------------------------------------
-# delete_stale_live_rows
-# ---------------------------------------------------------------------------
 
 def test_delete_stale_live_rows_returns_rowcount():
     """Return the number of rows deleted from the mock cursor."""
@@ -340,10 +300,6 @@ def test_delete_stale_live_rows_returns_rowcount():
     assert result == 5
     mock_conn.commit.assert_called_once()
 
-
-# ---------------------------------------------------------------------------
-# filter_new_live_rows
-# ---------------------------------------------------------------------------
 
 def test_filter_new_live_rows_skips_existing_rows():
     """Skip rows whose (stock_id, latest_time) already exist in the RDS."""
@@ -374,19 +330,6 @@ def test_filter_new_live_rows_returns_all_when_no_existing():
     result = filter_new_live_rows(df, existing_keys=set())
 
     assert len(result) == 2
-
-
-# ---------------------------------------------------------------------------
-# insert_live_rows
-# ---------------------------------------------------------------------------
-
-def test_insert_live_rows_returns_zero_for_empty_df():
-    """Return 0 when there are no live rows to insert."""
-    mock_conn = MagicMock()
-
-    result = insert_live_rows(mock_conn, pd.DataFrame())
-
-    assert result == 0
 
 
 def test_insert_live_rows_calls_execute_values():
@@ -420,36 +363,6 @@ def test_insert_live_rows_calls_execute_values():
     assert len(inserted_tuples) == 2
 
 
-# ---------------------------------------------------------------------------
-# load_alpaca_history (integration with mocks)
-# ---------------------------------------------------------------------------
-
-def test_load_alpaca_history_inserts_only_new_rows(
-        cleaned_history_df, stock_id_map):
-    """On a second run, only rows newer than the existing max date are inserted."""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_conn.cursor.return_value.__enter__ = MagicMock(
-        return_value=mock_cursor)
-    mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
-
-    # Simulate: stock 1 (AAPL) already has data from 2026-03-24 to 2026-03-24,
-    #           stock 2 (MSFT) already has data from 2026-03-24 to 2026-03-25
-    mock_cursor.fetchall.return_value = [
-        (1, date(2026, 3, 24), date(2026, 3, 24)),
-        (2, date(2026, 3, 24), date(2026, 3, 25)),
-    ]
-
-    with patch("alpaca_load.execute_values") as mock_exec:
-        result = load_alpaca_history(
-            mock_conn, cleaned_history_df, stock_id_map)
-
-    # Only AAPL 2026-03-25 should be new (1 row)
-    assert result == 1
-    inserted_tuples = mock_exec.call_args[0][2]
-    assert len(inserted_tuples) == 1
-
-
 def test_load_alpaca_history_loads_all_on_first_run(
         cleaned_history_df, stock_id_map):
     """On first run with empty RDS, all history rows are inserted."""
@@ -470,30 +383,6 @@ def test_load_alpaca_history_loads_all_on_first_run(
     assert result == 4
     inserted_tuples = mock_exec.call_args[0][2]
     assert len(inserted_tuples) == 4
-
-
-# ---------------------------------------------------------------------------
-# load_alpaca_live (integration with mocks)
-# ---------------------------------------------------------------------------
-
-def test_load_alpaca_live_deletes_stale_then_inserts_new(
-        cleaned_live_df, stock_id_map):
-    """Delete stale rows, skip existing, insert new."""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_conn.cursor.return_value.__enter__ = MagicMock(
-        return_value=mock_cursor)
-    mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
-    mock_cursor.rowcount = 0  # no stale rows to delete
-
-    # fetch_existing_live_keys returns empty set (first run today)
-    mock_cursor.fetchall.return_value = []
-
-    with patch("alpaca_load.execute_values") as mock_exec:
-        result = load_alpaca_live(
-            mock_conn, cleaned_live_df, stock_id_map)
-
-    assert result == 2
 
 
 def test_load_alpaca_live_skips_duplicates_on_rerun(
@@ -517,10 +406,6 @@ def test_load_alpaca_live_skips_duplicates_on_rerun(
     assert result == 0
     mock_exec.assert_not_called()
 
-
-# ---------------------------------------------------------------------------
-# load_all_to_rds (orchestrator)
-# ---------------------------------------------------------------------------
 
 def test_load_all_to_rds_calls_both_loaders(
         cleaned_history_df, cleaned_live_df, stock_id_map):

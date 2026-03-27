@@ -5,3 +5,5 @@ python-dotenv
 pytz
 pylint
 numpy
+psycopg2-binary
+boto3

@@ -1,5 +1,5 @@
 """Unit tests for alpaca_extract.py functions."""
-
+# pylint: skip-file
 from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
@@ -21,7 +21,6 @@ from alpaca_extract import (
 )
 
 
-# Fixtures: shared test data
 INGESTION_TIMESTAMP = "2026-03-25T12:00:00Z"
 START_DATE = "2026-03-01"
 END_DATE = "2026-03-25"
@@ -143,7 +142,6 @@ def test_build_latest_bars_params_returns_expected_dictionary():
     assert result == expected
 
 
-# Row parsers
 def test_parse_bar_row_returns_expected_row(aapl_raw_bar):
     """parse_bar_row should map Alpaca bar fields into the expected output format."""
     result = parse_bar_row("AAPL", aapl_raw_bar)

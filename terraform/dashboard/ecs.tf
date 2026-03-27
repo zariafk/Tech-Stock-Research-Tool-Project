@@ -59,28 +59,13 @@ resource "aws_iam_role_policy" "c22_stocksiphon_dashboard_task_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "athena:StartQueryExecution",
-          "athena:GetQueryExecution",
-          "athena:GetQueryResults",
-          "athena:StopQueryExecution"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:GetBucketLocation", "s3:ListBucket"]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
-      }
-    ]
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "rds-db:connect"
+      ]
+      Resource = "*"
+    }]
   })
 }
 

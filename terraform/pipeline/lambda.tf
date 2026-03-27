@@ -42,16 +42,6 @@ resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_s3_policy" {
-  role      = aws_iam_role.c22_stocksiphon_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_athena_policy" {
-  role       = aws_iam_role.c22_stocksiphon_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonAthenaFullAccess"
-}
-
 resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_ecr_policy" {
   role       = aws_iam_role.c22_stocksiphon_lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"

@@ -1,6 +1,5 @@
 requests
 pandas
-pytest
 boto3
 pyarrow
 psycopg2-binary

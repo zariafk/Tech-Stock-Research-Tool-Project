@@ -1,2 +1,4 @@
 - run chmod +x build_ingest.sh to make it executable
 - run ./build_ingest.sh
+- run chmod +x build_query.sh to make it executable
+- run ./build_query.sh

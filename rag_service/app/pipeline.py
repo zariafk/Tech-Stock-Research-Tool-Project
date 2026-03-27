@@ -25,6 +25,7 @@ def ingest_data(source: str, data_path: str = None, data: list = None) -> None:
 
 
 def format_sources(retrieved_docs: list) -> str:
+    """Format the sources of the retrieved documents for display."""
     sources = []
 
     for doc in retrieved_docs:
@@ -32,8 +33,12 @@ def format_sources(retrieved_docs: list) -> str:
         source = meta.get("source", "unknown")
         ticker = meta.get("ticker", "")
         date = meta.get("date") or meta.get("timestamp", "")
+        url = meta.get("url")
 
-        sources.append(f"- {source.upper()} ({ticker}, {date})")
+        if url:
+            sources.append(f"- {source.upper()} ({ticker}, {date}) → {url}")
+        else:
+            sources.append(f"- {source.upper()} ({ticker}, {date})")
 
     return "\n".join(sorted(set(sources)))
 

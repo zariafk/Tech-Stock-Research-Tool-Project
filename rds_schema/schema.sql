@@ -20,10 +20,10 @@ CREATE TABLE IF NOT EXISTS stock (
 CREATE TABLE IF NOT EXISTS rss_article (
     story_id        SERIAL PRIMARY KEY,
     title           VARCHAR(500)  NOT NULL,
-    link            VARCHAR(1000) NOT NULL UNIQUE,
+    url             VARCHAR(1000) NOT NULL UNIQUE,
     summary         VARCHAR(5000),
-    published_date  DATE,
-    source          BIGINT
+    published_date  TIMESTAMP,
+    source          VARCHAR(500)
 );
 
 -- Reddit posts
@@ -62,31 +62,30 @@ CREATE TABLE IF NOT EXISTS story_stock (
 
 -- Alpaca live snapshot (latest quote per stock)
 CREATE TABLE IF NOT EXISTS alpaca_live (
-    snapshot_id             SERIAL PRIMARY KEY,
-    stock_id                INT NOT NULL REFERENCES stock(stock_id),
-    snapshot_time           TIMESTAMP NOT NULL,
-    latest_price            DECIMAL,
-    current_day_open        DECIMAL,
-    current_day_high        DECIMAL,
-    current_day_low         DECIMAL,
-    current_day_volume      BIGINT,
-    current_day_vwap        DECIMAL,
-    current_day_trade_count BIGINT
+    live_bar_id    SERIAL PRIMARY KEY,
+    stock_id       INT NOT NULL REFERENCES stock(stock_id),
+    latest_time  TIMESTAMPTZ NOT NULL,
+    open           DECIMAL(14,6),
+    high           DECIMAL(14,6),
+    low            DECIMAL(14,6),
+    close          DECIMAL(14,6),
+    volume         BIGINT,
+    trade_count    BIGINT,
+    vwap           DECIMAL(14,6)
 );
 
--- Alpaca historical OHLCV bars
+
 CREATE TABLE IF NOT EXISTS alpaca_history (
-    bar_id          SERIAL PRIMARY KEY,
-    stock_id        INT NOT NULL REFERENCES stock(stock_id),
-    bar_timestamp   TIMESTAMP NOT NULL,
-    bar_date        DATE,
-    open            DECIMAL,
-    high            DECIMAL,
-    low             DECIMAL,
-    close           DECIMAL,
-    volume          BIGINT,
-    trade_count     BIGINT,
-    vwap            DECIMAL
+    history_bar_id SERIAL PRIMARY KEY,
+    stock_id       INT NOT NULL REFERENCES stock(stock_id),
+    bar_date       DATE NOT NULL,
+    open           DECIMAL(14,6),
+    high           DECIMAL(14,6),
+    low            DECIMAL(14,6),
+    close          DECIMAL(14,6),
+    volume         BIGINT,
+    trade_count    BIGINT,
+    vwap           DECIMAL(14,6)
 );
 
 -- ============================================================

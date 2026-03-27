@@ -35,13 +35,15 @@ DB_NAME = os.getenv("DB_NAME")
 
 def get_db_connection():
     """Establishes a connection to the PostgreSQL RDS database using environment credentials."""
+
     try:
         connection = psycopg2.connect(
             host=DB_HOST,
             port=int(DB_PORT),
             user=DB_USER,
             password=DB_PASSWORD,
-            dbname=DB_NAME
+            dbname=DB_NAME,
+            sslmode="require"
         )
         logger.info("Successfully connected to the PostgreSQL RDS database.")
         return connection
@@ -79,6 +81,64 @@ def execute_schema(connection, sql_content: str) -> None:
 
     finally:
         cursor.close()
+
+# def execute_schema(connection, sql_content: str) -> None:
+    # """Execute SQL schema from file, handling comments properly."""
+    # try:
+    #     with connection.cursor() as cursor:
+    #         # Remove SQL comments (-- style)
+    #         lines = []
+    #         for line in sql_content.split('\n'):
+    #             # Remove inline comments
+    #             if '--' in line:
+    #                 line = line[:line.index('--')]
+    #             lines.append(line)
+
+    #         cleaned_sql = '\n'.join(lines)
+
+    #         # Split by semicolon and filter out empty statements
+    #         statements = [stmt.strip() for stmt in cleaned_sql.split(';') if stmt.strip()]
+
+    #         for statement in statements:
+    #             logger.info("Executing: %s...", statement[:60])
+    #             cursor.execute(statement)
+
+    #         connection.commit()
+    #         logger.info("Schema created successfully.")
+    # except psycopg2.Error as db_err:
+    #     logger.error("Database error encountered. Transaction rolled back.")
+    #     connection.rollback()
+    #     raise db_err
+
+
+def execute_schema(connection, sql_content: str) -> None:
+    """Execute SQL schema from file, handling comments properly."""
+    try:
+        with connection.cursor() as cursor:
+            # Remove SQL comments (-- style)
+            lines = []
+            for line in sql_content.split('\n'):
+                # Remove inline comments
+                if '--' in line:
+                    line = line[:line.index('--')]
+                lines.append(line)
+
+            cleaned_sql = '\n'.join(lines)
+
+            # Split by semicolon and filter out empty statements
+            statements = [stmt.strip()
+                          for stmt in cleaned_sql.split(';') if stmt.strip()]
+
+            for statement in statements:
+                logger.info("Executing: %s...", statement[:60])
+                cursor.execute(statement)
+
+            connection.commit()
+            logger.info("Schema created successfully.")
+    except psycopg2.Error as db_err:
+        logger.error("Database error encountered. Transaction rolled back.")
+        connection.rollback()
+        raise db_err
 
 
 def main():

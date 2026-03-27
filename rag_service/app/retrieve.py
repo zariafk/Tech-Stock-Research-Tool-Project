@@ -14,14 +14,14 @@ def get_collection() -> chromadb.api.models.Collection.Collection:
     return client.get_or_create_collection(name="stock_data")
 
 
-def format_query(query, ticker=None) -> str:
+def format_query(query: str, ticker: str = None) -> str:
     """Format the user query to include the ticker if provided."""
     if ticker:
         return f"Stock {ticker}. {query}"
     return query
 
 
-def retrieve_documents(query, ticker=None, source=None, n_results=2) -> dict:
+def retrieve_documents(query: str, ticker: str = None, source: str = None, n_results: int = 2) -> dict:
     """Retrieve documents from the vector store based on the query and optional filters."""
     formatted_query = format_query(query, ticker)
     query_embedding = get_embeddings([formatted_query])[0]

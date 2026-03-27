@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 # Constants for API configuration and lookback window
 ALGOLIA_HN_URL = 'https://hn.algolia.com/api/v1/search'
 # HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
-HN_MAX_RESULTS = 10   # Filter for top-relevance hits to manage LLM token costs
+HN_MAX_RESULTS = 20   # Filter for top-relevance hits to manage LLM token costs
 MAX_WORKERS = 5       # Concurrent threads for parallel extraction
 
 

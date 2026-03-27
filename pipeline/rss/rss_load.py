@@ -121,7 +121,7 @@ def load(df: pd.DataFrame) -> int:
                         story_id,
                         stock_id,
                         row.get("sentiment"),
-                        row.get("score"),
+                        row.get("relevance_score"),
                         row.get("analysis"),
                         "rss",
                     ),

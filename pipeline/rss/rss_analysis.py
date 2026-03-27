@@ -63,7 +63,7 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
-MAX_WORKERS = 3  # Concurrent OpenAI threads to respect rate limits
+MAX_WORKERS = 10  # Concurrent OpenAI threads to respect rate limits
 
 CLIENT = OpenAI(
     api_key=os.environ.get(
@@ -136,11 +136,11 @@ def parse_relevance_data(response: str) -> list[dict]:
 
         results = []
         for item in data:
-            # Filter for r >= 7
-            if item.get('r', 0) >= 7:
+            # Filter for r >= 7 and only include tickers in our database
+            if item.get('r', 0) >= 7 and item.get('t') in TICKER_COMPANIES:
                 results.append({
                     "ticker": item.get('t'),
-                    "score": item.get('r'),
+                    "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
                     "analysis": item.get('why')
                 })
@@ -256,7 +256,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
     columns = [
         'ticker', 'article_id', 'title', 'url',
         'summary', 'published_date', 'source',
-        'score', 'sentiment', 'analysis'
+        'relevance_score', 'sentiment', 'analysis'
     ]
 
     # Ensure all columns exist (even if some rows didn't get them)
@@ -309,10 +309,6 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
         tickers = TECH_TICKERS
 
     logger.info('Starting extraction for %d tickers.', len(tickers))
-
-    # Fetch sources
-    # live = extract_live(RSS_FEEDS)
-    # historical = extract_historical(TICKER_COMPANIES)
 
     # Deduplicate BEFORE expensive OpenAI filtering
     raw_articles = deduplicate_raw(articles)

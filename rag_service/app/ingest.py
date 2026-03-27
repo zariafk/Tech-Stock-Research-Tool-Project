@@ -121,50 +121,52 @@ def normalize_reddit_record(record: dict) -> list[dict]:
     title = record.get("title", "")
     body = record.get("contents", "")
     flair = record.get("flair")
-    score = record.get("score")
-    ups = record.get("ups")
-    upvote_ratio = record.get("upvote_ratio")
-    num_comments = record.get("num_comments")
-    author = record.get("author")
     created_at = record.get("created_at")
-    url = record.get("url")
-    permalink = record.get("permalink")
-    subreddit_id = record.get("subreddit_id")
-    subreddit_name = record.get("subreddit_name")
-    subreddit_subscribers = record.get("subreddit_subscribers")
     post_id = record.get("post_id")
     tickers = record.get("tickers", [])
 
     if not title and not body:
         return []
 
-    text = f"{title}. {body}".strip()
+    base_text = f"{title}. {body}".strip()
 
     if flair:
-        text += f" Flair: {flair}"
+        base_text += f" Flair: {flair}"
 
     documents = []
 
-    for ticker in tickers:
+    for ticker_info in tickers:
+        ticker = ticker_info.get("ticker")
+        if not ticker:
+            continue
+
+        doc_text = base_text
+        analysis = ticker_info.get("analysis")
+
+        if analysis:
+            doc_text += f" Analysis: {analysis}"
+
         documents.append({
             "id": f"reddit_{post_id}_{ticker}",
-            "text": text,
+            "text": doc_text,
             "metadata": {
                 "source": "reddit",
                 "ticker": ticker,
                 "timestamp": created_at,
-                "url": url,
-                "permalink": permalink,
-                "post_id": post_id,
-                "author": author,
-                "subreddit_id": subreddit_id,
-                "subreddit_name": subreddit_name,
-                "subreddit_subscribers": subreddit_subscribers,
+                "url": record.get("url"),
+                "permalink": record.get("permalink"),
+                "post_id": record.get("post_id"),
+                "author": record.get("author"),
+                "subreddit_id": record.get("subreddit_id"),
+                "subreddit_name": record.get("subreddit_name"),
+                "subreddit_subscribers": record.get("subreddit_subscribers"),
                 "flair": flair,
-                "score": score,
-                "ups": ups,
-                "upvote_ratio": upvote_ratio,
-                "num_comments": num_comments
+                "score": record.get("score"),
+                "ups": record.get("ups"),
+                "upvote_ratio": record.get("upvote_ratio"),
+                "num_comments": record.get("num_comments"),
+                "relevance_score": ticker_info.get("relevance_score"),
+                "sentiment": ticker_info.get("sentiment"),
             }
         })
 

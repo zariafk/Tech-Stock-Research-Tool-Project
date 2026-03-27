@@ -11,12 +11,12 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def build_context(retrieved_docs) -> str:
+def build_context(retrieved_docs: list) -> str:
     """Build a context string from the retrieved documents."""
     return "\n".join(retrieved_docs)
 
 
-def generate_prompt(query, context) -> str:
+def generate_prompt(query: str, context: str) -> str:
     """Generate a prompt for the language model based on the user query and context."""
     return f"""
             You are a stock research assistant.
@@ -38,7 +38,7 @@ def generate_prompt(query, context) -> str:
             """
 
 
-def generate_answer(query, context) -> str:
+def generate_answer(query: str, context: str) -> str:
     """Generate an answer to the user's query based on the provided context."""
     prompt = generate_prompt(query, context)
 

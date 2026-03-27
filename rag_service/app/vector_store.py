@@ -9,7 +9,7 @@ client = chromadb.PersistentClient(path="chroma_db")
 collection = client.get_or_create_collection(name="stock_data")
 
 
-def build_document_id(doc) -> str:
+def build_document_id(doc: dict) -> str:
     """Build a unique document ID based on the document's metadata."""
     metadata = doc["metadata"]
     source = metadata.get("source", "unknown")
@@ -31,7 +31,7 @@ def build_document_id(doc) -> str:
     return f"{source}_{hash(doc['text'])}"
 
 
-def store_documents(documents, embeddings) -> None:
+def store_documents(documents: list, embeddings: list) -> None:
     """Store documents and their corresponding embeddings in the ChromaDB collection."""
     ids = [build_document_id(doc) for doc in documents]
     texts = [doc["text"] for doc in documents]

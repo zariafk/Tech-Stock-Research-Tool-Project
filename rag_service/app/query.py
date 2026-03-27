@@ -16,9 +16,9 @@ def build_context(retrieved_docs) -> str:
     return "\n".join(retrieved_docs)
 
 
-def generate_answer(query, context) -> str:
-    """Generate an answer to the user's query based on the provided context."""
-    prompt = f"""
+def generate_prompt(query, context) -> str:
+    """Generate a prompt for the language model based on the user query and context."""
+    return f"""
             You are a stock research assistant.
 
             Answer the user's question using only the context below.
@@ -36,6 +36,11 @@ def generate_answer(query, context) -> str:
             Question:
             {query}
             """
+
+
+def generate_answer(query, context) -> str:
+    """Generate an answer to the user's query based on the provided context."""
+    prompt = generate_prompt(query, context)
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

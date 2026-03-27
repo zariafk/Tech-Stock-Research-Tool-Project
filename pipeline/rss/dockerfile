@@ -14,4 +14,4 @@ COPY rss_transform.py .
 
 COPY rss_load.py .
 
-CMD ["rss_lambda_handler.lambda_handler"]
+CMD ["rss_pipeline.lambda_handler"]

@@ -1,7 +1,7 @@
 """Transform script for RSS pipeline.
 
 Cleans and standardises the enriched DataFrame produced by rss_extract.
-Output columns: ticker, article_id, title, link, summary, published_date, source, score, sentiment, analysis.
+Output columns: ticker, article_id, title, link, summary, published_date, source, relevance_score, sentiment, analysis.
 Deduplication across S3 runs is handled in rss_load.py via article_id.
 """
 
@@ -21,7 +21,7 @@ REQUIRED_COLUMNS = [
     "summary",
     "published_date",
     "source",
-    "score",
+    "relevance_score",
     "sentiment",
     "analysis",
 ]
@@ -29,6 +29,8 @@ REQUIRED_COLUMNS = [
 
 def validate_dataframe(df: pd.DataFrame) -> None:
     """Raise ValueError if df is missing any required columns."""
+    if len(df) == 0:
+        return
     for col in REQUIRED_COLUMNS:
         if col not in df.columns:
             print(f"DataFrame columns: {df.columns}")
@@ -75,6 +77,9 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
 
 def transform(df: pd.DataFrame) -> pd.DataFrame:
     """Run all cleaning steps and return a standardised DataFrame."""
+    if len(df) == 0:
+        logger.info("No articles to transform. Returning empty DataFrame.")
+        return df
     validate_dataframe(df)
     logger.info("Starting transform on %d rows.", len(df))
     df = strip_whitespace(df)
@@ -111,7 +116,7 @@ def prepare_for_rag(df: pd.DataFrame) -> list[dict]:
                 "source": row["source"],
                 "published_date": str(row["published_date"]),
                 "url": row["url"],
-                "relevance_score": row.get("score"),
+                "relevance_score": row.get("relevance_score"),
                 "sentiment": row.get("sentiment"),
             }
         }

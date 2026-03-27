@@ -28,7 +28,10 @@ def get_latest_article_date() -> Optional[datetime]:
         conn.close()
 
         if result and result[0]:
-            return result[0]
+            latest = pd.Timestamp(result[0])
+            if latest.tz is None:
+                latest = latest.tz_localize('UTC')
+            return latest
     except Exception as e:
         logger.warning("Failed to get latest article date from RDS: %s", e)
 
@@ -39,7 +42,17 @@ def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
     """Fetch RSS feed."""
     logger.info('LIVE: Fetching RSS: %s', url)
 
-    response = requests.get(url, verify=False, timeout=10)
+    try:
+        response = requests.get(url, verify=False, timeout=10)
+    except requests.exceptions.Timeout as e:
+        logger.error('LIVE: Connection timeout for %s: %s', url, e)
+        return None
+    except requests.exceptions.ConnectionError as e:
+        logger.error('LIVE: Connection error for %s: %s', url, e)
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error('LIVE: Request failed for %s: %s', url, e)
+        return None
 
     if response.status_code != 200:
         logger.error('LIVE: Failed: %s (Status: %s)',
@@ -100,8 +113,8 @@ def extract_live(feeds: dict) -> list[dict]:
             # Skip articles already present in RDS (full datetime comparison)
             if latest_date and article['published_date'] != 'N/A':
                 try:
-                    article_dt = datetime.strptime(
-                        article['published_date'], '%Y-%m-%d %H:%M:%S')
+                    article_dt = pd.Timestamp(
+                        article['published_date'], tz='UTC')
                     if article_dt <= latest_date:
                         continue
                 except Exception as e:

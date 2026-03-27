@@ -1,10 +1,8 @@
 """OpenAI-powered analysis of RSS articles for ticker relevance and sentiment."""
 
-from seed_historical.rss_extract_historical import (
-    extract_historical
-)
-
+import boto3
 from openai import OpenAI, RateLimitError, APIError
+from concurrent.futures import ThreadPoolExecutor
 import os
 import dotenv
 import time
@@ -13,7 +11,8 @@ import json
 import hashlib
 import psycopg2
 from logger import logger
-from top_100_tech_companies import tech_universe
+from fallback_stock import tech_universe
+from rss_extract_live import RSS_FEEDS, extract_live
 from rss_load import get_connection, get_tickers_from_db
 
 dotenv.load_dotenv()
@@ -65,12 +64,29 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
+MAX_WORKERS = 10  # Concurrent OpenAI threads to respect rate limits
 
-CLIENT = OpenAI(
-    api_key=os.environ.get(
-        'OPENAI_API_KEY'
-    )
-)
+
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
+
+
+def get_openai_client() -> OpenAI:
+    """Initialize OpenAI client using API key from AWS Secrets Manager."""
+    try:
+        secret = get_secret("c22-trade-research-tool-secrets")
+        api_key = secret.get('api_key') or secret.get('OPENAI_API_KEY')
+        return OpenAI(api_key=api_key)
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve OpenAI API key from Secrets Manager: %s", e)
+        raise
+
+
+CLIENT = get_openai_client()
 
 
 def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
@@ -137,11 +153,11 @@ def parse_relevance_data(response: str) -> list[dict]:
 
         results = []
         for item in data:
-            # Filter for r >= 7
-            if item.get('r', 0) >= 7:
+            # Filter for r >= 7 and only include tickers in our database
+            if item.get('r', 0) >= 7 and item.get('t') in TICKER_COMPANIES:
                 results.append({
                     "ticker": item.get('t'),
-                    "score": item.get('r'),
+                    "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
                     "analysis": item.get('why')
                 })
@@ -188,8 +204,23 @@ def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -
                 return []
 
 
+def _analyze_article(article_with_tickers: tuple) -> list[dict]:
+    """Analyze single article with OpenAI and enrich results."""
+    article, potential_tickers = article_with_tickers
+    # Make OpenAI call with retry logic
+    analysis = get_ticker_analysis(article, potential_tickers)
+
+    result = []
+    for analysis_result in analysis:
+        copy = article.copy()
+        copy.update(analysis_result)
+        result.append(copy)
+
+    return result
+
+
 def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
-    """Filter articles using keyword pre-filter then OpenAI."""
+    """Filter articles using keyword pre-filter then parallel OpenAI analysis."""
     filtered = []
 
     logger.info("Starting filter_by_ticker with %d articles", len(articles))
@@ -200,28 +231,26 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
     logger.info("Found %d/%d articles already in RDS — skipping OpenAI for those.",
                 len(existing_urls), len(candidate_urls))
 
+    # Step 1: Pre-filter with keyword matching
+    articles_to_analyze = []
     for article in articles:
         if article['url'] in existing_urls:
             logger.debug("Skipping existing article: %s", article['url'])
             continue
 
-        # Step 1: Fast keyword match (skip if no tickers found)
         potential_tickers = extract_keywords(article, tickers)
+        if potential_tickers:
+            articles_to_analyze.append((article, potential_tickers))
 
-        if not potential_tickers:
-            continue
+    # Step 2: Parallel OpenAI analysis using ThreadPoolExecutor
+    logger.info("Analyzing %d articles with OpenAI in parallel",
+                len(articles_to_analyze))
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        results = list(executor.map(_analyze_article, articles_to_analyze))
 
-        # Step 2: Call OpenAI for relevance/sentiment (with retry backoff)
-        analysis = get_ticker_analysis(article, potential_tickers)
-
-        # time.sleep(0.2)  # Rate limit protection between calls
-        logger.info("OpenAI analysis result: %s", analysis)
-
-        # Step 3: Merge OpenAI results with article, one row per ticker hit
-        for result in analysis:
-            copy = article.copy()
-            copy.update(result)  # Add score, sentiment, analysis
-            filtered.append(copy)
+    # Step 3: Flatten results from concurrent execution
+    for batch in results:
+        filtered.extend(batch)
 
     return filtered
 
@@ -244,7 +273,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
     columns = [
         'ticker', 'article_id', 'title', 'url',
         'summary', 'published_date', 'source',
-        'score', 'sentiment', 'analysis'
+        'relevance_score', 'sentiment', 'analysis'
     ]
 
     # Ensure all columns exist (even if some rows didn't get them)
@@ -298,10 +327,6 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
     logger.info('Starting extraction for %d tickers.', len(tickers))
 
-    # Fetch sources
-    # live = extract_live(RSS_FEEDS)
-    # historical = extract_historical(TICKER_COMPANIES)
-
     # Deduplicate BEFORE expensive OpenAI filtering
     raw_articles = deduplicate_raw(articles)
     logger.info('Combined into %d unique articles.', len(raw_articles))
@@ -314,13 +339,7 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    df = analysis(extract_historical(TICKER_COMPANIES))
-
-    # Store locally for testing as requested
-    if not df.empty:
-        filename = f"test_results_{int(time.time())}.csv"
-        df.to_csv(filename, index=False)
-        logger.info(f"Results stored for testing in {filename}")
-        print(df.head())
-    else:
-        logger.warning("No data extracted to store.")
+    # For local testing, run analysis on live extraction
+    live = extract_live(RSS_FEEDS)
+    df = analysis(live)
+    print(df.head())

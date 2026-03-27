@@ -12,6 +12,9 @@ Automated extraction and sentiment analysis for the top 100 tech companies. Desi
 1. Create .env: OPENAI_API_KEY=your_key
 2. Install dependencies: pip install -r ../requirements.txt
 
+Seed the database by running
+`python3 seed_rss_table.py`
+
 ## Usage
 - Run Extraction: python rss_extract.py (saves test_results_*.csv locally for verification)
 - Transform: rss_transform.py cleans and prepares data for storage

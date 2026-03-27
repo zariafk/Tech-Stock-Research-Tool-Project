@@ -9,11 +9,13 @@ import requests
 import time
 from datetime import datetime, timedelta
 from logger import logger
+from concurrent.futures import ThreadPoolExecutor
 
 # Constants for API configuration and lookback window
 ALGOLIA_HN_URL = 'https://hn.algolia.com/api/v1/search'
 # HN_HISTORY_YEARS = 2  # Standard lookback for identifying long-term tech shifts
-HN_MAX_RESULTS = 10   # Filter for top-relevance hits to manage LLM token costs
+HN_MAX_RESULTS = 20   # Filter for top-relevance hits to manage LLM token costs
+MAX_WORKERS = 5       # Concurrent threads for parallel extraction
 
 
 def get_hn_historical(company_name: str) -> list[dict]:
@@ -21,7 +23,7 @@ def get_hn_historical(company_name: str) -> list[dict]:
     Fetches high-engagement 'Stories' from Hacker News within a specific lookback period.
     Uses 'Points' as a proxy for community validation/impact.
     """
-    # Define start of lookback period (fixed to January 1, 2024)
+    # Fixed lookback: Jan 1, 2024 onward
     past_date = datetime(2024, 1, 1)
     timestamp = int(past_date.timestamp())
 
@@ -35,7 +37,7 @@ def get_hn_historical(company_name: str) -> list[dict]:
     try:
         response = requests.get(ALGOLIA_HN_URL, params=params, timeout=10)
 
-        # Guard clause for API failures (critical for automated pipelines)
+        # Return empty set on API failure; prevents partial ingestion
         if response.status_code != 200:
             logger.error('HIST: Algolia API Failure | %s | Code: %s',
                          company_name, response.status_code)
@@ -44,20 +46,18 @@ def get_hn_historical(company_name: str) -> list[dict]:
         data = response.json()
         articles = []
 
-        # Parse results into a standardized schema for downstream RAG consumption
+        # Limit to top HN_MAX_RESULTS to control LLM token costs
         for hit in data.get('hits', [])[:HN_MAX_RESULTS]:
-            # Use title as summary (HN titles are designed to be concise article descriptions)
-            # Add community engagement signals to approximate article significance
             title = hit.get('title', 'N/A')
             points = hit.get('points', 0)
             comments = hit.get('num_comments', 0)
+            # Engagement metrics aid SAR signal interpretation
             summary = f"{title} (Engagement: {points} points, {comments} comments)"
 
             article = {
                 'title': title,
-                # Try 'url' first, then 'story_url' (algonlia sometimes nests URLs differently)
+                # Algolia nests URLs; fallback preserves compatibility
                 'url': hit.get('url', hit.get('story_url', 'N/A')),
-                # Full summary with engagement context (matches TechCrunch RSS style more closely)
                 'summary': summary,
                 'published_date': datetime.fromtimestamp(hit['created_at_i']).strftime('%Y-%m-%d %H:%M:%S'),
                 'source': 'algolia_hn',
@@ -78,25 +78,31 @@ def get_hn_historical(company_name: str) -> list[dict]:
         return []
 
 
+def _extract_for_ticker(ticker_company_pair: tuple) -> list[dict]:
+    """Extract and tag articles for a single ticker from Hacker News."""
+    ticker, company = ticker_company_pair
+    articles = get_hn_historical(company)
+
+    result = []
+    for article in articles:
+        # Deep copy prevents cross-ticker reference contamination in concurrent context
+        article_copy = article.copy()
+        article_copy['ticker'] = ticker
+        result.append(article_copy)
+
+    return result
+
+
 def extract_historical(tickers_map: dict) -> list[dict]:
-    """
-    Orchestrates the extraction across the entire watchlist.
-    Maps company-level sentiment back to specific stock tickers.
-    """
+    """Orchestrates parallel extraction across the watchlist using ThreadPoolExecutor."""
+    # Concurrent extraction: each ticker fetched in parallel thread
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        results = list(executor.map(_extract_for_ticker, tickers_map.items()))
+
+    # Flatten list of lists from concurrent results
     articles = []
-
-    for ticker, company in tickers_map.items():
-        # Fetching data by Company Name (better for HN) but tagging by Ticker (better for Finance)
-        hn_articles = get_hn_historical(company)
-
-        for article in hn_articles:
-            # Create a hard copy to avoid reference issues during multi-ticker mapping
-            article_copy = article.copy()
-            article_copy['ticker'] = ticker
-            articles.append(article_copy)
-
-        # Politeness delay to avoid IP blacklisting (Rate Limit Management)
-        time.sleep(0.1)
+    for batch in results:
+        articles.extend(batch)
 
     logger.info(
         'HIST: Batch Extraction Complete: %d historical signals mapped to %d tickers.',

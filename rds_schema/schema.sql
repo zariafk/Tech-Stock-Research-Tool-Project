@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS reddit_analysis (
     PRIMARY KEY (story_id, stock_id)
 );
 
--- Alpaca live snapshot (latest quote per stock)
+-- Alpaca market data: live and historical bars
 CREATE TABLE IF NOT EXISTS alpaca_live (
     live_bar_id    SERIAL PRIMARY KEY,
     stock_id       INT NOT NULL REFERENCES stock(stock_id),

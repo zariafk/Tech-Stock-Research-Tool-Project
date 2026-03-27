@@ -3,7 +3,8 @@ import json
 from app.pipeline import ingest_data
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context) -> dict:
+    """AWS Lambda handler for ingesting data into the RAG system."""
     try:
         source = event.get("source")
         data = event.get("data")

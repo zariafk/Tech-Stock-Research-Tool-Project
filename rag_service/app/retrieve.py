@@ -1,18 +1,28 @@
+"""
+This module contains functions for retrieving relevant documents from 
+the vector store based on a user query.
+"""
+
+import chromadb
+
 from app.vector_store import client
 from app.embed import get_embeddings
 
 
-def get_collection():
+def get_collection() -> chromadb.api.models.Collection.Collection:
+    """Get the ChromaDB collection for stock data."""
     return client.get_or_create_collection(name="stock_data")
 
 
-def format_query(query, ticker=None):
+def format_query(query, ticker=None) -> str:
+    """Format the user query to include the ticker if provided."""
     if ticker:
         return f"Stock {ticker}. {query}"
     return query
 
 
-def retrieve_documents(query, ticker=None, source=None, n_results=2):
+def retrieve_documents(query, ticker=None, source=None, n_results=2) -> dict:
+    """Retrieve documents from the vector store based on the query and optional filters."""
     formatted_query = format_query(query, ticker)
     query_embedding = get_embeddings([formatted_query])[0]
 

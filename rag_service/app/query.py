@@ -1,3 +1,8 @@
+"""
+This module contains functions for building the context from retrieved documents 
+and generating answers to user queries using the OpenAI API.
+"""
+
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
@@ -6,11 +11,13 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def build_context(retrieved_docs):
+def build_context(retrieved_docs) -> str:
+    """Build a context string from the retrieved documents."""
     return "\n".join(retrieved_docs)
 
 
-def generate_answer(query, context):
+def generate_answer(query, context) -> str:
+    """Generate an answer to the user's query based on the provided context."""
     prompt = f"""
             You are a stock research assistant.
 

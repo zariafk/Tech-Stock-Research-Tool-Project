@@ -1,3 +1,9 @@
+"""
+This is the main entry point for the RAG service. It demonstrates how to 
+ingest data from various sources and answer a sample query using the RAG pipeline.
+Mostly used for local testing currently.
+"""
+
 from app.pipeline import ingest_data, answer_query
 
 if __name__ == "__main__":

@@ -1,13 +1,18 @@
+"""
+This module contains functions for ingesting and normalizing stock data from various 
+sources, including Alpaca, Reddit, and RSS feeds. 
+"""
+
 import json
 
 
-def load_data(file_path):
+def load_data(file_path) -> list:
     """Load stock data from a JSON file."""
     with open(file_path, "r") as f:
         return json.load(f)
 
 
-def get_input_data(data_path=None, data=None):
+def get_input_data(data_path=None, data=None) -> list:
     """Get input data either from a file path or directly from a provided data object."""
     if data is not None:
         return data
@@ -18,7 +23,7 @@ def get_input_data(data_path=None, data=None):
     raise ValueError("Either data_path or data must be provided.")
 
 
-def convert_to_documents(data, source):
+def convert_to_documents(data, source) -> list:
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
 

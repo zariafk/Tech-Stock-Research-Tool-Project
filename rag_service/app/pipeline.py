@@ -10,7 +10,7 @@ from app.retrieve import retrieve_documents
 from app.query import build_context, generate_answer
 
 
-def ingest_data(source, data_path=None, data=None) -> None:
+def ingest_data(source: str, data_path: str = None, data: list = None) -> None:
     """Ingest data from the specified source and store it in the vector store."""
     data = get_input_data(data_path=data_path, data=data)
     docs = convert_to_documents(data, source)
@@ -24,7 +24,7 @@ def ingest_data(source, data_path=None, data=None) -> None:
     store_documents(docs, embeddings)
 
 
-def answer_query(user_query, ticker=None, sources=None) -> str:
+def answer_query(user_query: str, ticker: str = None, sources: list = None) -> str:
     """Answer a user query using the RAG pipeline."""
     if sources is None:
         sources = ["alpaca", "rss"]

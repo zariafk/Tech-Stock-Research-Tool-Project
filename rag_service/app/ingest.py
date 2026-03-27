@@ -6,13 +6,13 @@ sources, including Alpaca, Reddit, and RSS feeds.
 import json
 
 
-def load_data(file_path) -> list:
+def load_data(file_path: str) -> list:
     """Load stock data from a JSON file."""
     with open(file_path, "r") as f:
         return json.load(f)
 
 
-def get_input_data(data_path=None, data=None) -> list:
+def get_input_data(data_path: str = None, data: list = None) -> list:
     """Get input data either from a file path or directly from a provided data object."""
     if data is not None:
         return data
@@ -23,7 +23,7 @@ def get_input_data(data_path=None, data=None) -> list:
     raise ValueError("Either data_path or data must be provided.")
 
 
-def convert_to_documents(data, source) -> list:
+def convert_to_documents(data: list, source: str) -> list:
     """Convert raw stock data into a list of documents with text and metadata."""
     documents = []
 
@@ -48,7 +48,7 @@ def convert_to_documents(data, source) -> list:
     return documents
 
 
-def normalize_alpaca_summary(record) -> dict | None:
+def normalize_alpaca_summary(record: dict) -> dict | None:
     """Normalize Alpaca stock summary data into a document format."""
     ticker = record.get("ticker")
 
@@ -96,7 +96,7 @@ def normalize_alpaca_summary(record) -> dict | None:
     }
 
 
-def normalize_reddit_record(record) -> dict | None:
+def normalize_reddit_record(record: dict) -> dict | None:
     """Normalize a Reddit post record into a document format."""
     post = record.get("reddit_post")
     stock = record.get("stock")

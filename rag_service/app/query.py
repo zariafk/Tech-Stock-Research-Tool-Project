@@ -16,7 +16,7 @@ def build_context(retrieved_docs: list) -> str:
     return "\n".join(retrieved_docs)
 
 
-def generate_prompt(query: str, context: str) -> str:
+def generate_chat_prompt(query: str, context: str) -> str:
     """Generate a prompt for the language model based on the user query and context."""
     return f"""
             You are a stock research assistant.
@@ -38,9 +38,40 @@ def generate_prompt(query: str, context: str) -> str:
             """
 
 
-def generate_answer(query: str, context: str) -> str:
+def generate_summary_prompt(query: str, context: str) -> str:
+    """Generate a prompt for the language model to create a summary based on the context."""
+    return f"""
+    You are a stock research assistant.
+
+    Generate a concise, structured summary based on the user's request.
+
+    User request:
+    {query}
+
+    Context:
+    {context}
+
+    The summary should:
+    - focus on the most relevant points
+    - include key events, sentiment, and price information if present
+    - include dates/times where relevant
+    - not include information not in the context
+
+    Never give financial advice.
+    """
+
+
+def generate_prompt(query: str, context: str, task_type: str) -> str:
+    """Generate a prompt for the language model based on the task type."""
+    if task_type == "summary":
+        return generate_summary_prompt(query, context)
+    else:
+        return generate_chat_prompt(query, context)
+
+
+def generate_answer(query: str, context: str, task_type: str) -> str:
     """Generate an answer to the user's query based on the provided context."""
-    prompt = generate_prompt(query, context)
+    prompt = generate_prompt(query, context, task_type)
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

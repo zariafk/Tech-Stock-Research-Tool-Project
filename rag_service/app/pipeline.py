@@ -24,10 +24,19 @@ def ingest_data(source: str, data_path: str = None, data: list = None) -> None:
     store_documents(docs, embeddings)
 
 
+def get_task_type(query: str) -> str:
+    q = query.lower().strip()
+
+    if q.startswith("generate a summary for") or q.startswith("summarise") or q.startswith("summarize"):
+        return "summary"
+
+    return "chat"
+
+
 def answer_query(user_query: str, ticker: str = None, sources: list = None) -> str:
     """Answer a user query using the RAG pipeline."""
     if sources is None:
-        sources = ["alpaca", "rss"]
+        sources = ["alpaca", "rss", "reddit"]
 
     retrieved_docs = []
 
@@ -49,5 +58,8 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None) -> s
     print("RETRIEVED DOCS:", retrieved_docs)
 
     context = build_context(retrieved_docs)
-    answer = generate_answer(user_query, context)
+
+    task_type = get_task_type(user_query)
+
+    answer = generate_answer(user_query, context, task_type)
     return answer

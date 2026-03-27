@@ -1,0 +1,16 @@
+*.env
+
+data/
+*.json
+
+chroma_db/
+
+__pycache__/
+.pytest_cache/
+*.pyc
+
+tests/
+
+dockerfile*
+
+main.py

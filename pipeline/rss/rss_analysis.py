@@ -54,10 +54,12 @@ def get_ticker_companies_from_db() -> dict:
         # Convert { ticker: {"stock_id": ..., "stock_name": ...} } to { ticker: "stock_name" }
         return {ticker: info["stock_name"] for ticker, info in stock_lookup.items()}
     except psycopg2.OperationalError as e:
-        logger.error("Database connection error fetching tickers, using default tech_universe: %s", e)
+        logger.error(
+            "Database connection error fetching tickers, using default tech_universe: %s", e)
         return tech_universe
     except (psycopg2.Error, KeyError, AttributeError) as e:
-        logger.error("Error processing tickers from DB, using default tech_universe: %s", e)
+        logger.error(
+            "Error processing tickers from DB, using default tech_universe: %s", e)
         return tech_universe
 
 
@@ -145,10 +147,12 @@ def parse_relevance_data(response: str) -> list[dict]:
                 })
         return results
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON from OpenAI response: {e}. Raw: {response}")
+        logger.error(
+            f"Failed to parse JSON from OpenAI response: {e}. Raw: {response}")
         return []
     except (KeyError, TypeError, AttributeError) as e:
-        logger.error(f"Unexpected structure in OpenAI response: {e}. Raw: {response}")
+        logger.error(
+            f"Unexpected structure in OpenAI response: {e}. Raw: {response}")
         return []
 
 
@@ -171,7 +175,8 @@ def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -
                     f'OpenAI rate limited. Retrying in {backoff}s... (attempt {attempt + 1}/{max_retries})')
                 time.sleep(backoff)
             else:
-                logger.error(f'OpenAI rate limit persisted after {max_retries} attempts: {e}')
+                logger.error(
+                    f'OpenAI rate limit persisted after {max_retries} attempts: {e}')
                 return []
         except APIError as e:
             logger.error(f'OpenAI API error on attempt {attempt + 1}: {e}')
@@ -221,6 +226,11 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
     return filtered
 
 
+def generate_article_id(url: str) -> str:
+    """Generate a consistent MD5 hash ID from a URL."""
+    return hashlib.md5(str(url).encode()).hexdigest()
+
+
 def create_dataframe(articles: list) -> pd.DataFrame:
     """Create DataFrame and add persistent unique IDs for deduplication."""
     if not articles:
@@ -229,8 +239,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
 
     df = pd.DataFrame(articles)
 
-    df['article_id'] = df['url'].apply(
-        lambda x: hashlib.md5(str(x).encode()).hexdigest())
+    df['article_id'] = df['url'].apply(generate_article_id)
 
     columns = [
         'ticker', 'article_id', 'title', 'url',

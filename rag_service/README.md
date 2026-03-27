@@ -1,0 +1,2 @@
+- run chmod +x build_ingest.sh to make it executable
+- run ./build_ingest.sh

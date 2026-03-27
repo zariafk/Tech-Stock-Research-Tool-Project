@@ -2,10 +2,10 @@
 
 set -e
 # Load from environment variables (set in CI/CD or export before running)
-AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?Error: AWS_ACCOUNT_ID not set}"
-REGION="${AWS_REGION:-eu-west-2}"
-REPO_NAME="${ECR_REPO_NAME:?Error: ECR_REPO_NAME not set}"
-TAG="${IMAGE_TAG:-latest}"
+AWS_ACCOUNT_ID="129033205317"
+REGION="eu-west-3"
+REPO_NAME="c22-stocksiphon-rss-ecr"
+TAG="latest"
 
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}"
 

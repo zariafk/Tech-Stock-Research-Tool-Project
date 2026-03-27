@@ -7,11 +7,32 @@ import time
 from typing import Optional
 from datetime import datetime
 from logger import logger
+import psycopg2
+import pandas as pd
+from rss_load import get_connection
 
 
 RSS_FEEDS = {
-    'techcrunch': 'https://techcrunch.com/feed/'
+    'techcrunch': 'https://techcrunch.com/feed/',
+    'hackernews': 'https://hnrss.org/frontpage'
 }
+
+
+def get_latest_article_date() -> Optional[datetime]:
+    """Query RDS for the latest article published_date to avoid reprocessing."""
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(published_date) FROM rss_article")
+            result = cur.fetchone()
+        conn.close()
+
+        if result and result[0]:
+            return result[0]
+    except Exception as e:
+        logger.warning("Failed to get latest article date from RDS: %s", e)
+
+    return None
 
 
 def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
@@ -37,7 +58,7 @@ def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
 def extract_entry_fields(entry: feedparser.FeedParserDict, source: str) -> dict:
     """Extract RSS entry fields."""
     title = entry.get('title', 'N/A')
-    link = entry.get('link', 'N/A')
+    url = entry.get('link', 'N/A')
     summary = entry.get('summary', entry.get('description', 'N/A'))
 
     published_date = 'N/A'
@@ -49,7 +70,7 @@ def extract_entry_fields(entry: feedparser.FeedParserDict, source: str) -> dict:
 
     return {
         'title': title,
-        'link': link,
+        'url': url,
         'summary': summary,
         'published_date': published_date,
         'source': source,
@@ -57,8 +78,13 @@ def extract_entry_fields(entry: feedparser.FeedParserDict, source: str) -> dict:
 
 
 def extract_live(feeds: dict) -> list[dict]:
-    """Extract all live articles from RSS feeds."""
+    """Extract all live articles from RSS feeds that are newer than the latest in RDS."""
     articles = []
+
+    # Get the latest article date from RDS
+    latest_date = get_latest_article_date()
+    if latest_date:
+        logger.info('LIVE: Only fetching articles after %s', latest_date)
 
     for source, url in feeds.items():
         logger.info('LIVE: Processing: %s', source)
@@ -70,8 +96,25 @@ def extract_live(feeds: dict) -> list[dict]:
 
         for entry in feed.entries:
             article = extract_entry_fields(entry, source)
+
+            # Skip articles already present in RDS (full datetime comparison)
+            if latest_date and article['published_date'] != 'N/A':
+                try:
+                    article_dt = datetime.strptime(
+                        article['published_date'], '%Y-%m-%d %H:%M:%S')
+                    if article_dt <= latest_date:
+                        continue
+                except Exception as e:
+                    logger.warning("Failed to compare dates %s vs %s: %s",
+                                   article['published_date'], latest_date, e)
+
             articles.append(article)
 
-    logger.info('LIVE: Extracted %d live articles total', len(articles))
+    logger.info('LIVE: Extracted %d new live articles total', len(articles))
     return articles
 
+
+if __name__ == '__main__':
+    articles = extract_live(RSS_FEEDS)
+    for art in articles:
+        print(f"{art['published_date']} - {art['title']} ({art['url']})")

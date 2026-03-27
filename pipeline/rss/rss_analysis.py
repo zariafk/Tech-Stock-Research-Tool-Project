@@ -13,11 +13,50 @@ import json
 import hashlib
 from logger import logger
 from top_100_tech_companies import tech_universe
+from rss_load import get_connection, get_tickers_from_db
 
 dotenv.load_dotenv()
 
-TICKER_COMPANIES = tech_universe
-TECH_TICKERS = list(tech_universe.keys())
+
+def get_existing_urls(urls: list[str]) -> set[str]:
+    """Batch-check which URLs from the current run already exist in rss_article.
+
+    Called fresh per pipeline run so it reflects the current DB state,
+    unlike a module-level cache which goes stale between runs.
+    """
+    if not urls:
+        return set()
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT url FROM rss_article WHERE url = ANY(%s)",
+                (list(urls),)
+            )
+            results = cur.fetchall()
+        conn.close()
+        return {row[0] for row in results}
+    except Exception as e:
+        logger.warning("Failed to check existing URLs in RDS: %s", e)
+        return set()
+
+
+def get_ticker_companies_from_db() -> dict:
+    """Get ticker -> stock_name mapping from the stock table."""
+    try:
+        conn = get_connection()
+        stock_lookup = get_tickers_from_db(conn)
+        conn.close()
+        # Convert { ticker: {"stock_id": ..., "stock_name": ...} } to { ticker: "stock_name" }
+        return {ticker: info["stock_name"] for ticker, info in stock_lookup.items()}
+    except Exception as e:
+        logger.warning(
+            f"Failed to get tickers from DB, falling back to tech_universe: {e}")
+        return tech_universe
+
+
+TICKER_COMPANIES = get_ticker_companies_from_db()
+TECH_TICKERS = list(TICKER_COMPANIES.keys())
 
 CLIENT = OpenAI(
     api_key=os.environ.get(
@@ -50,8 +89,8 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     Output Format (JSON list):
     [{{
       "t": "TICKER",
-      "r": [score],
-      "s": [score],
+      "r": score,
+      "s": score,
       "why": "one sentence justification"
     }}]
     """
@@ -63,6 +102,8 @@ def extract_keywords(entry: dict, tickers: list[str]) -> list[str]:
     matches = []
 
     for ticker in tickers:
+        if ticker not in TICKER_COMPANIES:
+            continue
         company = TICKER_COMPANIES[ticker].lower()
         if (ticker.lower() in text) or (company in text):
             matches.append(ticker)
@@ -129,15 +170,30 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
     """Filter articles using keyword pre-filter then OpenAI."""
     filtered = []
 
+    logger.info("Starting filter_by_ticker with %d articles", len(articles))
+
+    # Step 0: Single batch DB check — skip any URL that already exists in RDS
+    candidate_urls = [a['url'] for a in articles if a['url'] != 'N/A']
+    existing_urls = get_existing_urls(candidate_urls)
+    logger.info("Found %d/%d articles already in RDS — skipping OpenAI for those.",
+                len(existing_urls), len(candidate_urls))
+
     for article in articles:
+        if article['url'] in existing_urls:
+            logger.debug("Skipping existing article: %s", article['url'])
+            continue
+
         # Step 1: Fast keyword match (skip if no tickers found)
         potential_tickers = extract_keywords(article, tickers)
+
         if not potential_tickers:
             continue
 
         # Step 2: Call OpenAI for relevance/sentiment (with retry backoff)
         analysis = get_ticker_analysis(article, potential_tickers)
+
         # time.sleep(0.2)  # Rate limit protection between calls
+        logger.info("OpenAI analysis result: %s", analysis)
 
         # Step 3: Merge OpenAI results with article, one row per ticker hit
         for result in analysis:
@@ -156,11 +212,11 @@ def create_dataframe(articles: list) -> pd.DataFrame:
 
     df = pd.DataFrame(articles)
 
-    df['article_id'] = df['link'].apply(
+    df['article_id'] = df['url'].apply(
         lambda x: hashlib.md5(str(x).encode()).hexdigest())
 
     columns = [
-        'ticker', 'article_id', 'title', 'link',
+        'ticker', 'article_id', 'title', 'url',
         'summary', 'published_date', 'source',
         'score', 'sentiment', 'analysis'
     ]
@@ -195,13 +251,13 @@ def create_dataframe(articles: list) -> pd.DataFrame:
 
 
 def deduplicate_raw(articles: list[dict]) -> list[dict]:
-    """Remove duplicate links before OpenAI processing."""
+    """Remove duplicate urls before OpenAI processing."""
     seen = set()
     unique = []
     for art in articles:
-        if art['link'] not in seen:
+        if art['url'] not in seen:
             unique.append(art)
-            seen.add(art['link'])
+            seen.add(art['url'])
     return unique
 
 
@@ -232,7 +288,7 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    df = extract(extract_historical(TICKER_COMPANIES))
+    df = analysis(extract_historical(TICKER_COMPANIES))
 
     # Store locally for testing as requested
     if not df.empty:

@@ -1,10 +1,10 @@
 """Load transformed RSS articles to PostgreSQL RDS.
 
 Inserts into:
-  - rss_article: title, link, summary, published_date, source
+  - rss_article: title, url, summary, published_date, source
   - story_stock: stock_id, sentiment_score, relevance_score, analysis, story_type='rss'
 
-Deduplication: ON CONFLICT on link (unique article = unique link).
+Deduplication: ON CONFLICT on url (unique article = unique url).
 """
 
 import json
@@ -42,6 +42,7 @@ def get_connection():
         dbname=secret["dbname"],
         user=secret["username"],
         password=secret["password"],
+
     )
 
 
@@ -85,21 +86,21 @@ def load(df: pd.DataFrame) -> int:
 
                 stock_id = stock_lookup[ticker]["stock_id"]
 
-                # Insert into rss_article; skip duplicates via unique link
+                # Insert into rss_article; skip duplicates via unique url
                 cur.execute(
                     """
-                    INSERT INTO rss_article (title, link, summary, published_date, source)
+                    INSERT INTO rss_article (title, url, summary, published_date, source)
                     VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (link) DO NOTHING
+                    ON CONFLICT (url) DO NOTHING
                     RETURNING story_id
                     """,
                     (
                         row["title"],
-                        row["link"],
+                        row["url"],
                         row["summary"],
                         row["published_date"],
-                        row["source"],
-                    ),
+                        row["source"]
+                    )
                 )
 
                 result = cur.fetchone()

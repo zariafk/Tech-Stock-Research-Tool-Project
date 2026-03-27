@@ -48,7 +48,8 @@ def get_hn_historical(company_name: str) -> list[dict]:
         for hit in data.get('hits', [])[:HN_MAX_RESULTS]:
             article = {
                 'title': hit.get('title', 'N/A'),
-                'link': hit.get('url', 'N/A'),
+                # Try 'url' first, then 'story_url' (algonlia sometimes nests URLs differently)
+                'url': hit.get('url', hit.get('story_url', 'N/A')),
                 # Storing 'Points' in summary allows the LLM to weigh community consensus
                 'summary': f"Points: {hit.get('points', 0)}",
                 'published_date': datetime.fromtimestamp(hit['created_at_i']).strftime('%Y-%m-%d %H:%M:%S'),

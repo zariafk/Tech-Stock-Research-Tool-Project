@@ -2,14 +2,18 @@
 
 Flow: stock table → extract_historical → analysis → transform → load (RDS)
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path FIRST (before imports)
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from logger import logger
 from rss_load import load, get_connection, get_tickers_from_db
-from pipeline.rss.rss_transform import transform
+from rss_transform import transform
 from rss_analysis import analysis
-from pipeline.rss.seed_historical.rss_extract_historical import extract_historical
+from rss_extract_historical import extract_historical
 import dotenv
-dotenv.load_dotenv()
 
 
 def get_tickers_map() -> dict:

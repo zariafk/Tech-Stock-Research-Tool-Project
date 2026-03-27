@@ -17,7 +17,7 @@ REQUIRED_COLUMNS = [
     "ticker",
     "article_id",
     "title",
-    "link",
+    "url",
     "summary",
     "published_date",
     "source",
@@ -31,12 +31,13 @@ def validate_dataframe(df: pd.DataFrame) -> None:
     """Raise ValueError if df is missing any required columns."""
     for col in REQUIRED_COLUMNS:
         if col not in df.columns:
+            print(f"DataFrame columns: {df.columns}")
             raise ValueError(f"Missing column: {col}")
 
 
 def drop_incomplete_rows(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop rows where title, link, or published_date are missing."""
-    required = ["title", "link", "published_date"]
+    """Drop rows where title, url, or published_date are missing."""
+    required = ["title", "url", "published_date"]
     before = len(df)
     df = df.dropna(subset=required)
     df = df[~df[required].isin(["N/A", ""]).any(axis=1)]
@@ -109,7 +110,7 @@ def prepare_for_rag(df: pd.DataFrame) -> list[dict]:
                 "ticker": row["ticker"],
                 "source": row["source"],
                 "published_date": str(row["published_date"]),
-                "link": row["link"],
+                "url": row["url"],
                 "relevance_score": row.get("score"),
                 "sentiment": row.get("sentiment"),
             }

@@ -1,20 +1,33 @@
 [
     {
-        "title": "NVDA looks strong going into next quarter",
-        "selftext": "AI demand is insane right now, Nvidia could keep running.",
-        "score": 120,
-        "num_comments": 45,
-        "created_utc": 1711459200,
-        "url": "https://reddit.com/post1",
-        "subreddit_id": "t5_2qhhq"
-    },
-    {
-        "title": "Apple might be slowing down",
-        "selftext": "iPhone sales seem weaker this year.",
-        "score": 80,
-        "num_comments": 30,
-        "created_utc": 1711459300,
-        "url": "https://reddit.com/post2",
-        "subreddit_id": "t5_2qhhq"
+        "post_id": "abc123",
+        "title": "Big moves in tech stocks",
+        "contents": "Seeing strong momentum in Apple and Microsoft recently.",
+        "flair": "Discussion",
+        "score": 100,
+        "ups": 100,
+        "upvote_ratio": 0.95,
+        "num_comments": 20,
+        "author": "test_user",
+        "created_at": "2026-03-27T12:00:00Z",
+        "permalink": "/r/stocks/comments/abc123/test",
+        "url": "https://reddit.com/test",
+        "subreddit_id": "t5_test",
+        "subreddit_name": "stocks",
+        "subreddit_subscribers": 1000000,
+        "tickers": [
+            {
+                "ticker": "AAPL",
+                "relevance_score": 8,
+                "sentiment": 0.6,
+                "analysis": "Apple shows continued bullish momentum."
+            },
+            {
+                "ticker": "MSFT",
+                "relevance_score": 7,
+                "sentiment": 0.5,
+                "analysis": "Microsoft is also trending upward."
+            }
+        ]
     }
 ]

@@ -3,9 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Callable
 import pandas as pd
-from dotenv import load_dotenv
+
 from logger import logger
-load_dotenv()
 
 
 def convert_datetime_columns(df: pd.DataFrame,

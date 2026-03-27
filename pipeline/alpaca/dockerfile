@@ -5,6 +5,7 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
 COPY run_pipeline.py ${LAMBDA_TASK_ROOT}/
+COPY config.py ${LAMBDA_TASK_ROOT}/
 COPY alpaca_extract.py ${LAMBDA_TASK_ROOT}/
 COPY alpaca_transform_cleaning.py ${LAMBDA_TASK_ROOT}/
 COPY alpaca_load.py ${LAMBDA_TASK_ROOT}/

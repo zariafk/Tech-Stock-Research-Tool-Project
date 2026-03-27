@@ -12,7 +12,7 @@ load_dotenv()
 
 
 BARS_URL = "https://data.alpaca.markets/v2/stocks/bars"
-SNAPSHOT_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
+LATEST_BARS_URL = "https://data.alpaca.markets/v2/stocks/bars/latest"
 API_KEY = os.environ["ALPACA_API_KEY"]
 API_SECRET = os.environ["ALPACA_API_SECRET"]
 
@@ -69,8 +69,8 @@ def build_bars_params(symbols: list[str], start: str, end: str) -> dict:
     return params
 
 
-def build_snapshot_params(symbols: list[str]) -> dict:
-    """Build query parameters for the snapshot endpoint."""
+def build_latest_bars_params(symbols: list[str]) -> dict:
+    """Build query parameters for the latest_bars endpoint."""
     params = {
         "symbols": ",".join(symbols),
         "feed": "iex"}
@@ -78,13 +78,12 @@ def build_snapshot_params(symbols: list[str]) -> dict:
     return params
 
 
-def parse_bar_row(symbol: str, bar: dict, ingestion_timestamp: str) -> dict:
+def parse_bar_row(symbol: str, bar: dict) -> dict:
     """Convert one Alpaca bar record into the fact_stock_bars row format."""
     bar_timestamp = bar.get("t")
 
     row = {
-        "symbol": symbol,
-        "bar_timestamp": bar_timestamp,
+        "ticker": symbol,
         "bar_date": bar_timestamp[:10],
         "open": bar.get("o"),
         "high": bar.get("h"),
@@ -93,35 +92,29 @@ def parse_bar_row(symbol: str, bar: dict, ingestion_timestamp: str) -> dict:
         "volume": bar.get("v"),
         "trade_count": bar.get("n"),
         "vwap": bar.get("vw"),
-        "ingestion_time": ingestion_timestamp[:19]  # Only to seconds
     }
     return row
 
 
-def parse_snapshot_row(symbol: str, snapshot: dict, ingestion_timestamp: str) -> dict:
-    """Convert one Alpaca snapshot record into the fact_stock_snapshot row format."""
-    latest_trade = snapshot.get("latestTrade", {})
-    daily_bar = snapshot.get("dailyBar", {})
-    prev_daily_bar = snapshot.get("prevDailyBar", {})
+def parse_latest_bar_row(symbol: str, latest_bar: dict) -> dict:
+    """Convert one Alpaca latest_bar record into the fact_stock_snapshot row format."""
 
     row = {
-        "symbol": symbol,
-        "snapshot_time": latest_trade.get("t")[:19],
-        "latest_trade_price": latest_trade.get("p"),
-        "previous_close": prev_daily_bar.get("c"),
-        "current_day_open": daily_bar.get("o"),
-        "current_day_high": daily_bar.get("h"),
-        "current_day_low": daily_bar.get("l"),
-        "current_day_volume": daily_bar.get("v"),
-        "current_day_vwap": daily_bar.get("vw"),
-        "current_day_trade_count": daily_bar.get("n"),
-        "ingestion_time": ingestion_timestamp[:19]  # Only to seconds
+        "ticker": symbol,
+        "latest_time": latest_bar.get("t")[:19],
+        "open": latest_bar.get("o"),
+        "high": latest_bar.get("h"),
+        "low": latest_bar.get("l"),
+        "close": latest_bar.get("c"),
+        "volume": latest_bar.get("v"),
+        "trade_count": latest_bar.get("n"),
+        "vwap": latest_bar.get("vw")
     }
 
     return row
 
 
-def extract_bar_rows_from_response(data: dict, ingestion_timestamp: str) -> list[dict]:
+def extract_bar_rows_from_response(data: dict) -> list[dict]:
     """Turn one Alpaca bars API response page into a list of row dictionaries."""
     page_rows = []
 
@@ -130,7 +123,7 @@ def extract_bar_rows_from_response(data: dict, ingestion_timestamp: str) -> list
     for symbol, symbol_bars in page:
         # Each bar becomes one output row
         for bar in symbol_bars:
-            row = parse_bar_row(symbol, bar, ingestion_timestamp)
+            row = parse_bar_row(symbol, bar)
             page_rows.append(row)
 
     return page_rows
@@ -149,7 +142,6 @@ def extract_fact_daily_stock_bars(symbols: list[str], start: str, end: str) -> l
     url = BARS_URL
     headers = get_request_headers()
     params = build_bars_params(symbols, start, end)
-    ingestion_timestamp = get_ingestion_time()
 
     all_rows = []
     next_page_token = None
@@ -168,7 +160,7 @@ def extract_fact_daily_stock_bars(symbols: list[str], start: str, end: str) -> l
 
             # Convert this page of API results into output rows
             page_rows = extract_bar_rows_from_response(
-                data, ingestion_timestamp)
+                data)
             all_rows.extend(page_rows)
 
             next_page_token = data.get("next_page_token")
@@ -193,7 +185,7 @@ def extract_fact_daily_stock_bars(symbols: list[str], start: str, end: str) -> l
     return all_rows
 
 
-def extract_fact_stock_snapshot(symbols: list[str]) -> list[dict]:
+def extract_fact_latest_bars(symbols: list[str]) -> list[dict]:
     """
     Extract current stock snapshots for the given symbols.
     One output row represents one symbol at one snapshot refresh time.
@@ -202,19 +194,17 @@ def extract_fact_stock_snapshot(symbols: list[str]) -> list[dict]:
 
     logger.info("Starting stock snapshot extraction for %s stocks", len(symbols))
 
-    url = SNAPSHOT_URL
+    url = LATEST_BARS_URL
     headers = get_request_headers()
-    params = build_snapshot_params(symbols)
-    ingestion_timestamp = get_ingestion_time()
+    params = build_latest_bars_params(symbols)
 
     all_rows = []
 
     try:
         data = make_request(url, headers, params)
 
-        for symbol in data:
-            snapshot = data[symbol]
-            row = parse_snapshot_row(symbol, snapshot, ingestion_timestamp)
+        for symbol, latest_bar in data.get("bars", {}).items():
+            row = parse_latest_bar_row(symbol, latest_bar)
             all_rows.append(row)
 
     except requests.RequestException:
@@ -243,17 +233,16 @@ def extract_all_stock_data(symbols: list[str], start: str, end: str) -> dict:
     try:
         fact_stock_bars_rows = extract_fact_daily_stock_bars(
             symbols, start, end)
-        fact_stock_snapshot_rows = extract_fact_stock_snapshot(symbols)
+        fact_stock_latest_bars = extract_fact_latest_bars(symbols)
 
         rag_dicts = {
-            "fact_stock_bars": fact_stock_bars_rows,
-            "fact_stock_snapshot": fact_stock_snapshot_rows}
-
+            "alpaca_history": fact_stock_bars_rows,
+            "alpaca_live": fact_stock_latest_bars}
         fact_stock_bars_df = rows_to_dataframe(
-            fact_stock_bars_rows, "fact_stock_bars")
+            fact_stock_bars_rows, "alpaca_history")
 
-        fact_stock_snapshot_df = rows_to_dataframe(
-            fact_stock_snapshot_rows, "fact_stock_snapshot")
+        fact_stock_latest_bars_df = rows_to_dataframe(
+            fact_stock_latest_bars, "alpaca_live")
 
     except requests.RequestException:
         logger.exception("Stock data extraction workflow failed")
@@ -262,52 +251,9 @@ def extract_all_stock_data(symbols: list[str], start: str, end: str) -> dict:
     output = {
         "rag_dict": rag_dicts,  # Include raw extracted dicts for RAG use
         "dataframes": {
-            "fact_stock_bars": fact_stock_bars_df,
+            "alpaca_history": fact_stock_bars_df,
             # Include DataFrames for transformation use
-            "fact_stock_snapshot": fact_stock_snapshot_df}}
+            "alpaca_live": fact_stock_latest_bars_df}}
 
     logger.info("Finished stock data extraction workflow")
     return output
-
-
-# Purely for local testing of extract script, will be removed
-# in final version since extract will be called from transform in production
-if __name__ == "__main__":
-    top_100_symbols = tech_universe
-
-    try:
-        extracted_data = extract_all_stock_data(
-            symbols=top_100_symbols,
-            start="2026-03-23",
-            end="2026-03-25"
-        )
-
-        print(json.dumps(extracted_data["rag_dict"]
-              ["fact_stock_snapshot"][0:2], indent=4))
-
-        print(json.dumps(extracted_data["rag_dict"]
-              ["fact_stock_bars"][0:2], indent=4))
-
-        logger.info(
-            "Bars rows extracted: %s",
-            len(extracted_data["dataframes"]["fact_stock_bars"]))
-
-        print("\nFACT STOCK BARS")
-        print(extracted_data["dataframes"]["fact_stock_bars"].head())
-
-        print("\nFACT STOCK SNAPSHOT")
-        print(extracted_data["dataframes"]
-              ["fact_stock_snapshot"].head())
-
-        logger.info(
-            "Bars rows extracted: %s",
-            len(extracted_data["dataframes"]["fact_stock_bars"]))
-
-        logger.info(
-            "Snapshot rows extracted: %s",
-            len(extracted_data["dataframes"]["fact_stock_snapshot"])
-        )
-
-    except requests.RequestException:
-        logger.exception("Script execution failed")
-        raise

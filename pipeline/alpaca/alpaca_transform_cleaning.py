@@ -1,61 +1,52 @@
 """Module for transforming, cleaning, and validating Alpaca stock data."""
 
+from dataclasses import dataclass
+from typing import Any, Callable
 import pandas as pd
 from dotenv import load_dotenv
-
-from alpaca_extract import extract_all_stock_data
-from top_100_tech_companies import tech_universe
 from logger import logger
-
 load_dotenv()
 
 
-def convert_datetime_columns(df, datetime_columns):
-    """
-    Convert selected columns to pandas datetime.
-    Invalid values become NaT.
-    """
+def convert_datetime_columns(df: pd.DataFrame,
+                             datetime_columns: list[str]) -> pd.DataFrame:
+    """Convert selected columns to pandas datetime."""
+
     cleaned_df = df.copy()
 
     for column in datetime_columns:
         if column in cleaned_df.columns:
             cleaned_df[column] = pd.to_datetime(
-                cleaned_df[column],
-                errors="coerce",
-                utc=True)
+                cleaned_df[column], errors="coerce", utc=True)
 
     return cleaned_df
 
 
-def convert_numeric_columns(df, numeric_columns):
-    """
-    Convert selected columns to numeric.
-    Invalid values become NaN.
-    """
+def convert_numeric_columns(df: pd.DataFrame,
+                            numeric_columns: list[str]) -> pd.DataFrame:
+    """Convert selected columns to numeric and invalid values become NaN."""
+
     cleaned_df = df.copy()
 
     for column in numeric_columns:
         if column in cleaned_df.columns:
             cleaned_df[column] = pd.to_numeric(
-                cleaned_df[column],
-                errors="coerce"
-            )
+                cleaned_df[column], errors="coerce")
 
     return cleaned_df
 
 
-def remove_duplicates(df, subset_columns):
-    """
-    Remove duplicate rows based on selected columns.
-    Keep the first occurrence.
-    """
-    return df.drop_duplicates(subset=subset_columns, keep="first").copy()
+def remove_duplicates(df: pd.DataFrame,
+                      subset_columns: list[str]) -> pd.DataFrame:
+    """Remove duplicate rows based on selected columns, keep the first occurrence."""
+
+    duplicated = df.drop_duplicates(subset=subset_columns, keep="first").copy()
+    return duplicated
 
 
-def ensure_required_columns_exist(df, required_columns):
-    """
-    Raise an error if any required columns are missing.
-    """
+def ensure_required_columns_exist(df: pd.DataFrame,
+                                  required_columns: list[str]) -> None:
+    """Raise an error if any required columns are missing."""
     missing_columns = []
 
     for column in required_columns:
@@ -66,10 +57,9 @@ def ensure_required_columns_exist(df, required_columns):
         raise ValueError(f"Missing required columns: {missing_columns}")
 
 
-def validate_symbol(symbol, valid_symbols):
-    """
-    Check that the symbol exists and belongs to the approved universe.
-    """
+def validate_symbol(symbol: Any, valid_symbols: list[str]) -> str:
+    """Check that the symbol exists and belongs to the approved universe."""
+
     if pd.isna(symbol):
         return "missing_symbol"
 
@@ -82,20 +72,19 @@ def validate_symbol(symbol, valid_symbols):
     return "valid"
 
 
-def validate_timestamp(timestamp_value, column_name):
-    """
-    Check that a timestamp parsed correctly.
-    """
+def validate_timestamp(timestamp_value: Any, column_name: str) -> str:
+    """Check that a timestamp parsed correctly."""
+
     if pd.isna(timestamp_value):
         return f"invalid_{column_name}"
 
     return "valid"
 
 
-def validate_number(value, column_name, allow_zero):
-    """
-    Validate numeric fields.
-    """
+def validate_number(value: Any, column_name: str,
+                    allow_zero: bool) -> str:
+    """Validate numeric fields."""
+
     if pd.isna(value):
         return f"missing_{column_name}"
 
@@ -109,10 +98,10 @@ def validate_number(value, column_name, allow_zero):
     return "valid"
 
 
-def validate_vwap_against_range(vwap_value, low_value, high_value, column_name):
-    """
-    If VWAP is present, check that it lies within the low-high range.
-    """
+def validate_vwap_against_range(vwap_value: float, low_value: float,
+                                high_value: float, column_name: str) -> str:
+    """If VWAP is present, check that it lies within the low-high range."""
+
     if pd.isna(vwap_value):
         return "valid"
 
@@ -125,10 +114,9 @@ def validate_vwap_against_range(vwap_value, low_value, high_value, column_name):
     return "valid"
 
 
-def validate_bar_price_relationships(row):
-    """
-    Validate OHLC relationships for stock bar data.
-    """
+def validate_bar_price_relationships(row: pd.Series) -> str:
+    """Validate OHLC relationships for stock bar data."""
+
     open_price = row["open"]
     high_price = row["high"]
     low_price = row["low"]
@@ -155,40 +143,41 @@ def validate_bar_price_relationships(row):
     return "valid"
 
 
-def validate_snapshot_price_relationships(row):
-    """
-    Validate current day price relationships for stock snapshot data.
-    """
-    latest_trade_price = row["latest_trade_price"]
-    current_open = row["current_day_open"]
-    current_high = row["current_day_high"]
-    current_low = row["current_day_low"]
+def validate_latest_bar_price_relationships(row: pd.Series) -> str:
+    """Validate OHLC relationships for latest bar (snapshot) data."""
 
-    if pd.isna(latest_trade_price) or pd.isna(current_open) or pd.isna(current_high) or pd.isna(current_low):
-        return "missing_snapshot_price"
+    open_price = row["open"]
+    high_price = row["high"]
+    low_price = row["low"]
+    close_price = row["close"]
 
-    if current_high < current_low:
-        return "current_day_high_less_than_current_day_low"
+    if pd.isna(open_price) or pd.isna(high_price) or pd.isna(low_price) or pd.isna(close_price):
+        return "missing_bar_price"
 
-    if current_high < current_open:
-        return "current_day_high_less_than_current_day_open"
+    if high_price < low_price:
+        return "high_less_than_low"
 
-    if current_low > current_open:
-        return "current_day_low_greater_than_current_day_open"
+    if high_price < open_price:
+        return "high_less_than_open"
 
-    if latest_trade_price < current_low or latest_trade_price > current_high:
-        return "latest_trade_price_outside_current_day_range"
+    if high_price < close_price:
+        return "high_less_than_close"
+
+    if low_price > open_price:
+        return "low_greater_than_open"
+
+    if low_price > close_price:
+        return "low_greater_than_close"
 
     return "valid"
 
 
-def validate_stock_bar_row(row, valid_symbols):
-    """
-    Validate one stock bar row.
-    """
+def validate_stock_bar_row(row: pd.Series,
+                           valid_symbols: list[str]) -> str:
+    """Validate one stock bar row."""
+
     checks = [
-        validate_symbol(row["symbol"], valid_symbols),
-        validate_timestamp(row["bar_timestamp"], "bar_timestamp"),
+        validate_symbol(row["ticker"], valid_symbols),
         validate_timestamp(row["bar_date"], "bar_date"),
         validate_number(row["open"], "open", allow_zero=False),
         validate_number(row["high"], "high", allow_zero=False),
@@ -197,9 +186,7 @@ def validate_stock_bar_row(row, valid_symbols):
         validate_number(row["volume"], "volume", allow_zero=True),
         validate_number(row["trade_count"], "trade_count", allow_zero=True),
         validate_bar_price_relationships(row),
-        validate_vwap_against_range(
-            row["vwap"], row["low"], row["high"], "vwap")
-    ]
+        validate_vwap_against_range(row["vwap"], row["low"], row["high"], "vwap")]
 
     for result in checks:
         if result != "valid":
@@ -208,35 +195,22 @@ def validate_stock_bar_row(row, valid_symbols):
     return "valid"
 
 
-def validate_stock_snapshot_row(row, valid_symbols):
-    """
-    Validate one stock snapshot row.
-    """
+def validate_stock_latest_bar_row(row: pd.Series,
+                                  valid_symbols: list[str]) -> str:
+    """Validate one stock latest_bar row."""
+
     checks = [
-        validate_symbol(row["symbol"], valid_symbols),
-        validate_timestamp(row["snapshot_time"], "snapshot_time"),
-        validate_number(row["latest_trade_price"],
-                        "latest_trade_price", allow_zero=False),
-        validate_number(row["previous_close"],
-                        "previous_close", allow_zero=False),
-        validate_number(row["current_day_open"],
-                        "current_day_open", allow_zero=False),
-        validate_number(row["current_day_high"],
-                        "current_day_high", allow_zero=False),
-        validate_number(row["current_day_low"],
-                        "current_day_low", allow_zero=False),
-        validate_number(row["current_day_volume"],
-                        "current_day_volume", allow_zero=True),
-        validate_number(row["current_day_trade_count"],
-                        "current_day_trade_count", allow_zero=True),
-        validate_snapshot_price_relationships(row),
-        validate_vwap_against_range(
-            row["current_day_vwap"],
-            row["current_day_low"],
-            row["current_day_high"],
-            "current_day_vwap"
-        )
-    ]
+        validate_symbol(row["ticker"], valid_symbols),
+        validate_timestamp(row["latest_time"], "latest_time"),
+        validate_number(row["open"], "open", allow_zero=False),
+        validate_number(row["high"], "high", allow_zero=False),
+        validate_number(row["low"], "low", allow_zero=False),
+        validate_number(row["close"], "close", allow_zero=False),
+        validate_number(row["close"], "close", allow_zero=False),
+        validate_number(row["volume"], "volume", allow_zero=True),
+        validate_number(row["trade_count"], "trade_count", allow_zero=True),
+        validate_latest_bar_price_relationships(row),
+        validate_vwap_against_range(row["vwap"], row["low"], row["high"], "vwap")]
 
     for result in checks:
         if result != "valid":
@@ -245,44 +219,90 @@ def validate_stock_snapshot_row(row, valid_symbols):
     return "valid"
 
 
-def run_table_transformation(raw_df, table_name, required_columns,
-                             datetime_columns, numeric_columns,
-                             duplicate_subset_columns, validation_function,
-                             valid_symbols, sort_columns):
-    """
-    Run the full transformation flow for one table
-    and return only the cleaned dataframe.
-    """
+@dataclass
+class TableConfig:
+    """Declarative configuration for one table's cleaning pipeline."""
+    table_name: str
+    required_columns: list[str]
+    datetime_columns: list[str]
+    numeric_columns: list[str]
+    duplicate_subset_columns: list[str]
+    validation_function: Callable[[pd.Series, list[str]], str]
+    sort_columns: list[str]
+
+
+def _cast_columns(df: pd.DataFrame,
+                  config: TableConfig) -> pd.DataFrame:
+    """Apply datetime and numeric type casting defined in the config."""
+
+    working_df = convert_datetime_columns(df, config.datetime_columns)
+    working_df = convert_numeric_columns(working_df, config.numeric_columns)
+    return working_df
+
+
+def _deduplicate(df: pd.DataFrame,
+                 config: TableConfig) -> tuple[pd.DataFrame, int]:
+    """Remove duplicate rows and return the cleaned frame plus the drop count."""
+
+    rows_before = len(df)
+    deduped_df = remove_duplicates(df, config.duplicate_subset_columns)
+    return deduped_df, rows_before - len(deduped_df)
+
+
+def _validate_rows(df: pd.DataFrame, config: TableConfig,
+                   valid_symbols: list[str]) -> tuple[pd.DataFrame, int, int]:
+    """Run the row-level validator and return cleaned rows plus counts."""
+    validation_results: list[str] = []
+
+    for _, row in df.iterrows():
+        result = config.validation_function(row, valid_symbols)
+        validation_results.append(result)
+
+    df["validation_result"] = validation_results
+
+    valid_count = int((df["validation_result"] == "valid").sum())
+    rejected_count = int((df["validation_result"] != "valid").sum())
+
+    cleaned_df = df[df["validation_result"] == "valid"].copy()
+    cleaned_df = cleaned_df.drop(columns=["validation_result"])
+
+    return cleaned_df, valid_count, rejected_count
+
+
+def run_table_transformation(raw_df: pd.DataFrame,
+                             table_name: str,
+                             required_columns: list[str],
+                             datetime_columns: list[str],
+                             numeric_columns: list[str],
+                             duplicate_subset_columns: list[str],
+                             validation_function: Callable[[pd.Series, list[str]], str],
+                             valid_symbols: list[str],
+                             sort_columns: list[str],) -> pd.DataFrame:
+    """Run the full transformation flow for one table
+    and return only the cleaned dataframe."""
+
     logger.info("Starting transformation for %s", table_name)
+
+    config = TableConfig(
+        table_name=table_name,
+        required_columns=required_columns,
+        datetime_columns=datetime_columns,
+        numeric_columns=numeric_columns,
+        duplicate_subset_columns=duplicate_subset_columns,
+        validation_function=validation_function,
+        sort_columns=sort_columns,)
 
     working_df = raw_df.copy()
 
-    ensure_required_columns_exist(working_df, required_columns)
-    working_df = convert_datetime_columns(working_df, datetime_columns)
-    working_df = convert_numeric_columns(working_df, numeric_columns)
+    ensure_required_columns_exist(working_df, config.required_columns)
+    working_df = _cast_columns(working_df, config)
+    working_df, duplicate_rows_removed = _deduplicate(working_df, config)
+    cleaned_df, valid_rows_count, rejected_rows_count = _validate_rows(
+        working_df, config, valid_symbols)
 
-    rows_before = len(working_df)
-    working_df = remove_duplicates(working_df, duplicate_subset_columns)
-    duplicate_rows_removed = rows_before - len(working_df)
-
-    validation_results = []
-
-    for _, row in working_df.iterrows():
-        result = validation_function(row, valid_symbols)
-        validation_results.append(result)
-
-    working_df["validation_result"] = validation_results
-
-    valid_rows_count = int((working_df["validation_result"] == "valid").sum())
-    rejected_rows_count = int(
-        (working_df["validation_result"] != "valid").sum())
-
-    cleaned_df = working_df[
-        working_df["validation_result"] == "valid"
-    ].copy()
-
-    cleaned_df = cleaned_df.drop(columns=["validation_result"])
-    cleaned_df = cleaned_df.sort_values(by=sort_columns).reset_index(drop=True)
+    cleaned_df = cleaned_df.sort_values(
+        by=config.sort_columns
+    ).reset_index(drop=True)
 
     logger.info("%s duplicate rows removed: %s",
                 table_name, duplicate_rows_removed)
@@ -292,16 +312,15 @@ def run_table_transformation(raw_df, table_name, required_columns,
     return cleaned_df
 
 
-def transform_stock_bars(raw_bars_df, valid_symbols):
-    """
-    Transform, clean, and validate FACT_STOCK_BARS data.
-    """
-    return run_table_transformation(
+def transform_stock_bars(
+        raw_bars_df: pd.DataFrame, valid_symbols: list[str]) -> pd.DataFrame:
+    """Transform, clean, and validate alpaca_history (stock bars) data."""
+
+    transform_daily_bars = run_table_transformation(
         raw_df=raw_bars_df,
-        table_name="FACT_STOCK_BARS",
+        table_name="ALPACA_HISTORY",
         required_columns=[
-            "symbol",
-            "bar_timestamp",
+            "ticker",
             "bar_date",
             "open",
             "high",
@@ -309,92 +328,72 @@ def transform_stock_bars(raw_bars_df, valid_symbols):
             "close",
             "volume",
             "trade_count",
-            "vwap",
-            "ingestion_time"
-        ],
-        datetime_columns=["bar_timestamp", "bar_date", "ingestion_time"],
+            "vwap",],
+        datetime_columns=["bar_date"],
         numeric_columns=["open", "high", "low",
                          "close", "volume", "trade_count", "vwap"],
-        duplicate_subset_columns=["symbol", "bar_timestamp"],
+        duplicate_subset_columns=["ticker", "bar_date"],
         validation_function=validate_stock_bar_row,
         valid_symbols=valid_symbols,
-        sort_columns=["symbol", "bar_timestamp"]
-    )
+        sort_columns=["ticker", "bar_date"])
+
+    return transform_daily_bars
 
 
-def transform_stock_snapshot(raw_snapshot_df, valid_symbols):
-    """
-    Transform, clean, and validate FACT_STOCK_SNAPSHOT data.
-    """
-    return run_table_transformation(
-        raw_df=raw_snapshot_df,
-        table_name="FACT_STOCK_SNAPSHOT",
+def transform_stock_latest_bars(raw_latest_bars_df: pd.DataFrame,
+                                valid_symbols: list[str]) -> pd.DataFrame:
+    """Transform, clean, and validate alpaca_live (latest bars/snapshot) data."""
+    transform_latest = run_table_transformation(
+        raw_df=raw_latest_bars_df,
+        table_name="ALPACA_LIVE",
         required_columns=[
-            "symbol",
-            "snapshot_time",
-            "latest_trade_price",
-            "previous_close",
-            "current_day_open",
-            "current_day_high",
-            "current_day_low",
-            "current_day_volume",
-            "current_day_vwap",
-            "current_day_trade_count",
-            "ingestion_time"
+            "ticker",
+            "latest_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "trade_count",
+            "vwap",
         ],
-        datetime_columns=["snapshot_time", "ingestion_time"],
+        datetime_columns=["latest_time"],
         numeric_columns=[
-            "latest_trade_price",
-            "previous_close",
-            "current_day_open",
-            "current_day_high",
-            "current_day_low",
-            "current_day_volume",
-            "current_day_vwap",
-            "current_day_trade_count"
+            "close",
+            "open",
+            "high",
+            "low",
+            "volume",
+            "vwap",
+            "trade_count"
         ],
-        duplicate_subset_columns=["symbol", "snapshot_time"],
-        validation_function=validate_stock_snapshot_row,
+        duplicate_subset_columns=["ticker", "latest_time"],
+        validation_function=validate_stock_latest_bar_row,
         valid_symbols=valid_symbols,
-        sort_columns=["symbol", "snapshot_time"]
+        sort_columns=["ticker", "latest_time"]
     )
 
-
-def main():
-    """
-    Run extraction first, then test transformation locally.
-    """
-    try:
-        logger.info("Starting local extraction and transformation test")
-
-        symbols = tech_universe
-        start = "2023-03-23"
-        end = "2026-03-25"
-
-        extracted_output = extract_all_stock_data(symbols, start, end)
-
-        raw_bars_df = extracted_output["dataframes"]["fact_stock_bars"]
-        raw_snapshot_df = extracted_output["dataframes"]["fact_stock_snapshot"]
-
-        clean_bars_df = transform_stock_bars(
-            raw_bars_df, symbols)
-        clean_snapshot_df = transform_stock_snapshot(
-            raw_snapshot_df, symbols)
-
-        logger.info("Bars clean shape: %s", clean_bars_df.shape)
-
-        logger.info("Snapshot clean shape: %s", clean_snapshot_df.shape)
-
-        return {
-            "clean_bars_df": clean_bars_df,
-            "clean_snapshot_df": clean_snapshot_df,
-        }
-
-    except Exception as error:
-        logger.exception("Local transformation test failed: %s", error)
-        raise ValueError(
-            "Data transformation failed during cleaning and validation") from error
+    return transform_latest
 
 
-if __name__ == "__main__":
-    main()
+def clean_all_stock_data(extracted_output: dict,
+                         valid_symbols: list[str]) -> dict[str, pd.DataFrame]:
+    """Clean and validate all extracted stock tables
+    and return a dict of cleaned dataframes."""
+
+    logger.info("Starting full cleaning workflow")
+
+    raw_bars_df = extracted_output["dataframes"]["alpaca_history"]
+    raw_latest_bars_df = extracted_output["dataframes"]["alpaca_live"]
+
+    clean_bars_df = transform_stock_bars(raw_bars_df, valid_symbols)
+    clean_latest_bars_df = transform_stock_latest_bars(
+        raw_latest_bars_df, valid_symbols)
+
+    cleaned_data = {
+        "alpaca_history": clean_bars_df,
+        "alpaca_live": clean_latest_bars_df,
+    }
+
+    logger.info("Finished full cleaning workflow")
+    return cleaned_data

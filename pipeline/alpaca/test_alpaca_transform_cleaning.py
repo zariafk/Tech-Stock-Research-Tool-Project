@@ -1,4 +1,5 @@
 """Tests for the alpaca_transform_cleaning module."""
+# pylint: disable=redefined-outer-name
 
 import pandas as pd
 import pytest
@@ -12,7 +13,7 @@ from alpaca_transform_cleaning import (
     validate_number,
     validate_bar_price_relationships,
     validate_stock_bar_row,
-    validate_stock_snapshot_row,
+    validate_stock_latest_bar_row,
     transform_stock_bars,
 )
 
@@ -27,8 +28,7 @@ def valid_symbols():
 def valid_bar_row():
     """Provide one valid stock bar row for row-level validation tests."""
     return pd.Series({
-        "symbol": "AAPL",
-        "bar_timestamp": pd.Timestamp("2026-03-25T04:00:00Z"),
+        "ticker": "AAPL",
         "bar_date": pd.Timestamp("2026-03-25T04:00:00Z"),
         "open": 100.0,
         "high": 110.0,
@@ -37,25 +37,22 @@ def valid_bar_row():
         "volume": 1000,
         "trade_count": 25,
         "vwap": 103.0,
-        "ingestion_time": pd.Timestamp("2026-03-25T22:21:50Z"),
     })
 
 
 @pytest.fixture
-def valid_snapshot_row():
-    """Provide one valid stock snapshot row for row-level validation tests."""
+def valid_latest_bar_row():
+    """Provide one valid stock latest_bar row for row-level validation tests."""
     return pd.Series({
-        "symbol": "MSFT",
-        "snapshot_time": pd.Timestamp("2026-03-25T19:59:54Z"),
-        "latest_trade_price": 300.0,
-        "previous_close": 295.0,
-        "current_day_open": 297.0,
-        "current_day_high": 305.0,
-        "current_day_low": 294.0,
-        "current_day_volume": 50000,
-        "current_day_vwap": 299.5,
-        "current_day_trade_count": 1200,
-        "ingestion_time": pd.Timestamp("2026-03-25T22:21:51Z"),
+        "ticker": "MSFT",
+        "latest_time": pd.Timestamp("2026-03-25T19:59:54Z"),
+        "close": 300.0,
+        "open": 297.0,
+        "high": 305.0,
+        "low": 294.0,
+        "volume": 50000,
+        "vwap": 299.5,
+        "trade_count": 1200,
     })
 
 
@@ -64,9 +61,8 @@ def bars_dataframe():
     """Provide a small bars dataframe with one duplicate row."""
     return pd.DataFrame([
         {
-            "symbol": "AAPL",
-            "bar_timestamp": "2026-03-25T04:00:00Z",
-            "bar_date": "2026-03-25T04:00:00Z",
+            "ticker": "AAPL",
+            "bar_date": "2026-03-25",
             "open": "100.0",
             "high": "110.0",
             "low": "95.0",
@@ -74,12 +70,10 @@ def bars_dataframe():
             "volume": "1000",
             "trade_count": "25",
             "vwap": "103.0",
-            "ingestion_time": "2026-03-25T22:21:50Z",
         },
         {
-            "symbol": "AAPL",
-            "bar_timestamp": "2026-03-25T04:00:00Z",
-            "bar_date": "2026-03-25T04:00:00Z",
+            "ticker": "AAPL",
+            "bar_date": "2026-03-25",
             "open": "100.0",
             "high": "110.0",
             "low": "95.0",
@@ -87,12 +81,10 @@ def bars_dataframe():
             "volume": "1000",
             "trade_count": "25",
             "vwap": "103.0",
-            "ingestion_time": "2026-03-25T22:21:50Z",
         },
         {
-            "symbol": "MSFT",
-            "bar_timestamp": "2026-03-25T04:00:00Z",
-            "bar_date": "2026-03-25T04:00:00Z",
+            "ticker": "MSFT",
+            "bar_date": "2026-03-25",
             "open": "200.0",
             "high": "210.0",
             "low": "190.0",
@@ -100,7 +92,6 @@ def bars_dataframe():
             "volume": "1500",
             "trade_count": "30",
             "vwap": "202.0",
-            "ingestion_time": "2026-03-25T22:21:50Z",
         },
     ])
 
@@ -132,12 +123,12 @@ def test_convert_numeric_columns_parses_numbers_and_invalid_values():
 def test_remove_duplicates_keeps_first_matching_row():
     """Remove duplicate rows based on the selected subset."""
     df = pd.DataFrame([
-        {"symbol": "AAPL", "bar_timestamp": "2026-03-25", "volume": 100},
-        {"symbol": "AAPL", "bar_timestamp": "2026-03-25", "volume": 100},
-        {"symbol": "MSFT", "bar_timestamp": "2026-03-25", "volume": 200},
+        {"ticker": "AAPL", "bar_date": "2026-03-25", "volume": 100},
+        {"ticker": "AAPL", "bar_date": "2026-03-25", "volume": 100},
+        {"ticker": "MSFT", "bar_date": "2026-03-25", "volume": 200},
     ])
 
-    result = remove_duplicates(df, ["symbol", "bar_timestamp", "volume"])
+    result = remove_duplicates(df, ["ticker", "bar_date", "volume"])
 
     assert len(result) == 2
 
@@ -145,12 +136,12 @@ def test_remove_duplicates_keeps_first_matching_row():
 def test_ensure_required_columns_exist_raises_for_missing_columns():
     """Raise a ValueError when a required column is missing."""
     df = pd.DataFrame({
-        "symbol": ["AAPL"],
+        "ticker": ["AAPL"],
         "open": [100.0]
     })
 
     with pytest.raises(ValueError, match="Missing required columns"):
-        ensure_required_columns_exist(df, ["symbol", "open", "close"])
+        ensure_required_columns_exist(df, ["ticker", "open", "close"])
 
 
 def test_validate_symbol_rejects_symbol_outside_universe(valid_symbols):
@@ -184,14 +175,15 @@ def test_validate_stock_bar_row_accepts_valid_row(valid_bar_row, valid_symbols):
     assert result == "valid"
 
 
-def test_validate_stock_snapshot_row_rejects_price_outside_day_range(valid_snapshot_row, valid_symbols):
-    """Reject a snapshot row when the latest trade price is outside the day range."""
-    row = valid_snapshot_row.copy()
-    row["latest_trade_price"] = 400.0
+def test_validate_stock_latest_bar_row_rejects_price_outside_ohlc_range(
+        valid_latest_bar_row, valid_symbols):
+    """Reject a latest_bar row when the close price is outside the OHLC range."""
+    row = valid_latest_bar_row.copy()
+    row["close"] = 400.0
 
-    result = validate_stock_snapshot_row(row, valid_symbols)
+    result = validate_stock_latest_bar_row(row, valid_symbols)
 
-    assert result == "latest_trade_price_outside_current_day_range"
+    assert result == "high_less_than_close"
 
 
 def test_transform_stock_bars_returns_clean_deduplicated_rows(bars_dataframe, valid_symbols):
@@ -200,4 +192,4 @@ def test_transform_stock_bars_returns_clean_deduplicated_rows(bars_dataframe, va
 
     assert len(result) == 2
     assert "validation_result" not in result.columns
-    assert list(result["symbol"]) == ["AAPL", "MSFT"]
+    assert list(result["ticker"]) == ["AAPL", "MSFT"]

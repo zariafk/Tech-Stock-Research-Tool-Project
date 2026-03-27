@@ -10,12 +10,12 @@ from alpaca_extract import (
     make_request,
     validate_symbols,
     build_bars_params,
-    build_snapshot_params,
+    build_latest_bars_params,
     parse_bar_row,
-    parse_snapshot_row,
+    parse_latest_bar_row,
     extract_bar_rows_from_response,
     extract_fact_daily_stock_bars,
-    extract_fact_stock_snapshot,
+    extract_fact_latest_bars,
     rows_to_dataframe,
     extract_all_stock_data
 )
@@ -73,36 +73,32 @@ def msft_raw_bar():
 
 
 @pytest.fixture()
-def aapl_raw_snapshot():
-    """AAPL snapshot as returned by the Alpaca API."""
+def aapl_raw_latest_bar():
+    """AAPL latest bar as returned by the Alpaca API."""
     return {
-        "latestTrade": {"t": "2026-03-25T11:30:00Z", "p": 220.5},
-        "dailyBar": {
-            "o": 218.0,
-            "h": 221.0,
-            "l": 217.5,
-            "v": 500000,
-            "vw": 219.4,
-            "n": 14000,
-        },
-        "prevDailyBar": {"c": 217.8},
+        "t": "2026-03-25T11:30:00Z",
+        "o": 218.0,
+        "h": 221.0,
+        "l": 217.5,
+        "c": 220.5,
+        "v": 500000,
+        "vw": 219.4,
+        "n": 14000,
     }
 
 
 @pytest.fixture()
-def msft_raw_snapshot():
-    """MSFT snapshot as returned by the Alpaca API."""
+def msft_raw_latest_bar():
+    """MSFT latest bar as returned by the Alpaca API."""
     return {
-        "latestTrade": {"t": "2026-03-25T11:31:00Z", "p": 330.5},
-        "dailyBar": {
-            "o": 328.0,
-            "h": 332.0,
-            "l": 327.0,
-            "v": 450000,
-            "vw": 329.4,
-            "n": 12000,
-        },
-        "prevDailyBar": {"c": 327.8},
+        "t": "2026-03-25T11:31:00Z",
+        "o": 328.0,
+        "h": 332.0,
+        "l": 327.0,
+        "c": 330.5,
+        "v": 450000,
+        "vw": 329.4,
+        "n": 12000,
     }
 
 
@@ -135,9 +131,9 @@ def test_build_bars_params_returns_expected_dictionary():
     assert result == expected
 
 
-def test_build_snapshot_params_returns_expected_dictionary():
-    """build_snapshot_params should build the expected query parameters."""
-    result = build_snapshot_params(["AAPL", "NVDA"])
+def test_build_latest_bars_params_returns_expected_dictionary():
+    """build_latest_bars_params should build the expected query parameters."""
+    result = build_latest_bars_params(["AAPL", "NVDA"])
 
     expected = {
         "symbols": "AAPL,NVDA",
@@ -150,11 +146,10 @@ def test_build_snapshot_params_returns_expected_dictionary():
 # Row parsers
 def test_parse_bar_row_returns_expected_row(aapl_raw_bar):
     """parse_bar_row should map Alpaca bar fields into the expected output format."""
-    result = parse_bar_row("AAPL", aapl_raw_bar, INGESTION_TIMESTAMP)
+    result = parse_bar_row("AAPL", aapl_raw_bar)
 
     expected = {
-        "symbol": "AAPL",
-        "bar_timestamp": "2026-03-24T00:00:00Z",
+        "ticker": "AAPL",
         "bar_date": "2026-03-24",
         "open": 210.0,
         "high": 215.0,
@@ -163,28 +158,25 @@ def test_parse_bar_row_returns_expected_row(aapl_raw_bar):
         "volume": 1000000,
         "trade_count": 25000,
         "vwap": 212.5,
-        "ingestion_time": "2026-03-25T12:00:00",
     }
 
     assert result == expected
 
 
-def test_parse_snapshot_row_returns_expected_row(aapl_raw_snapshot):
-    """parse_snapshot_row should map Alpaca snapshot fields into the expected output format."""
-    result = parse_snapshot_row("MSFT", aapl_raw_snapshot, INGESTION_TIMESTAMP)
+def test_parse_latest_bar_row_returns_expected_row(aapl_raw_latest_bar):
+    """parse_latest_bar_row should map Alpaca latest_bar fields into the expected output format."""
+    result = parse_latest_bar_row("AAPL", aapl_raw_latest_bar)
 
     expected = {
-        "symbol": "MSFT",
-        "snapshot_time": "2026-03-25T11:30:00",
-        "latest_trade_price": 220.5,
-        "previous_close": 217.8,
-        "current_day_open": 218.0,
-        "current_day_high": 221.0,
-        "current_day_low": 217.5,
-        "current_day_volume": 500000,
-        "current_day_vwap": 219.4,
-        "current_day_trade_count": 14000,
-        "ingestion_time": "2026-03-25T12:00:00",
+        "ticker": "AAPL",
+        "latest_time": "2026-03-25T11:30:00",
+        "close": 220.5,
+        "open": 218.0,
+        "high": 221.0,
+        "low": 217.5,
+        "volume": 500000,
+        "vwap": 219.4,
+        "trade_count": 14000,
     }
 
     assert result == expected
@@ -202,11 +194,11 @@ def test_extract_bar_rows_from_response_returns_all_rows(aapl_raw_bar, msft_raw_
         }
     }
 
-    result = extract_bar_rows_from_response(data, INGESTION_TIMESTAMP)
+    result = extract_bar_rows_from_response(data)
 
     assert len(result) == 2
-    assert result[0]["symbol"] == "AAPL"
-    assert result[1]["symbol"] == "MSFT"
+    assert result[0]["ticker"] == "AAPL"
+    assert result[1]["ticker"] == "MSFT"
 
 
 def test_rows_to_dataframe_returns_dataframe():
@@ -268,18 +260,15 @@ def test_make_request_raises_request_exception_on_http_error(mock_get_request_he
 # Tests: extraction workflows
 
 
-@patch("alpaca_extract.get_ingestion_time")
 @patch("alpaca_extract.get_request_headers")
 @patch("alpaca_extract.make_request")
 def test_extract_fact_daily_stock_bars_single_page(
     mock_make_request,
     mock_get_request_headers,
-    mock_get_ingestion_time,
     aapl_raw_bar,
 ):
     """extract_fact_daily_stock_bars should return parsed rows for a single response page."""
     mock_get_request_headers.return_value = {"header": "value"}
-    mock_get_ingestion_time.return_value = INGESTION_TIMESTAMP
 
     mock_make_request.return_value = {
         "bars": {"AAPL": [aapl_raw_bar]},
@@ -289,23 +278,20 @@ def test_extract_fact_daily_stock_bars_single_page(
     result = extract_fact_daily_stock_bars(["AAPL"], START_DATE, END_DATE)
 
     assert len(result) == 1
-    assert result[0]["symbol"] == "AAPL"
+    assert result[0]["ticker"] == "AAPL"
     assert result[0]["close"] == 214.0
 
 
-@patch("alpaca_extract.get_ingestion_time")
 @patch("alpaca_extract.get_request_headers")
 @patch("alpaca_extract.make_request")
 def test_extract_fact_daily_stock_bars_multiple_pages(
     mock_make_request,
     mock_get_request_headers,
-    mock_get_ingestion_time,
     aapl_raw_bar,
     aapl_raw_bar_prev_day,
 ):
     """extract_fact_daily_stock_bars should keep requesting until next_page_token is None."""
     mock_get_request_headers.return_value = {"header": "value"}
-    mock_get_ingestion_time.return_value = INGESTION_TIMESTAMP
 
     mock_make_request.side_effect = [
         {
@@ -322,60 +308,58 @@ def test_extract_fact_daily_stock_bars_multiple_pages(
 
     assert len(result) == 2
     assert mock_make_request.call_count == 2
-    assert result[0]["bar_timestamp"] == "2026-03-23T00:00:00Z"
-    assert result[1]["bar_timestamp"] == "2026-03-24T00:00:00Z"
+    assert result[0]["bar_date"] == "2026-03-23"
+    assert result[1]["bar_date"] == "2026-03-24"
 
 
-@patch("alpaca_extract.get_ingestion_time")
 @patch("alpaca_extract.get_request_headers")
 @patch("alpaca_extract.make_request")
-def test_extract_fact_stock_snapshot_returns_rows(
+def test_extract_fact_latest_bars_returns_rows(
     mock_make_request,
     mock_get_request_headers,
-    mock_get_ingestion_time,
-    aapl_raw_snapshot,
-    msft_raw_snapshot,
+    aapl_raw_latest_bar,
+    msft_raw_latest_bar,
 ):
-    """extract_fact_stock_snapshot should return one row per symbol."""
+    """extract_fact_latest_bars should return one row per symbol."""
     mock_get_request_headers.return_value = {"header": "value"}
-    mock_get_ingestion_time.return_value = INGESTION_TIMESTAMP
 
     mock_make_request.return_value = {
-        "AAPL": aapl_raw_snapshot,
-        "MSFT": msft_raw_snapshot,
+        "bars": {
+            "AAPL": aapl_raw_latest_bar,
+            "MSFT": msft_raw_latest_bar,
+        }
     }
 
-    result = extract_fact_stock_snapshot(["AAPL", "MSFT"])
+    result = extract_fact_latest_bars(["AAPL", "MSFT"])
 
     assert len(result) == 2
-    assert result[0]["symbol"] in ["AAPL", "MSFT"]
-    assert result[1]["symbol"] in ["AAPL", "MSFT"]
+    assert result[0]["ticker"] in ["AAPL", "MSFT"]
+    assert result[1]["ticker"] in ["AAPL", "MSFT"]
 
 
 @patch("alpaca_extract.extract_fact_daily_stock_bars")
-@patch("alpaca_extract.extract_fact_stock_snapshot")
+@patch("alpaca_extract.extract_fact_latest_bars")
 def test_extract_all_stock_data_returns_rag_dict_and_dataframes(
-    mock_extract_fact_stock_snapshot,
+    mock_extract_fact_latest_bars,
     mock_extract_fact_daily_stock_bars,
 ):
     """extract_all_stock_data should return raw dictionaries and pandas DataFrames."""
     mock_extract_fact_daily_stock_bars.return_value = [
-        {"symbol": "AAPL", "close": 214.0}
+        {"ticker": "AAPL", "close": 214.0}
     ]
-    mock_extract_fact_stock_snapshot.return_value = [
-        {"symbol": "AAPL", "latest_trade_price": 220.5}
+    mock_extract_fact_latest_bars.return_value = [
+        {"ticker": "AAPL", "close": 220.5}
     ]
 
     result = extract_all_stock_data(["AAPL"], START_DATE, END_DATE)
 
     assert "rag_dict" in result
     assert "dataframes" in result
-    assert "fact_stock_bars" in result["rag_dict"]
-    assert "fact_stock_snapshot" in result["rag_dict"]
+    assert "alpaca_history" in result["rag_dict"]
+    assert "alpaca_live" in result["rag_dict"]
 
-    assert isinstance(result["dataframes"]["fact_stock_bars"], pd.DataFrame)
-    assert isinstance(result["dataframes"]
-                      ["fact_stock_snapshot"], pd.DataFrame)
+    assert isinstance(result["dataframes"]["alpaca_history"], pd.DataFrame)
+    assert isinstance(result["dataframes"]["alpaca_live"], pd.DataFrame)
 
-    assert result["rag_dict"]["fact_stock_bars"][0]["symbol"] == "AAPL"
-    assert result["dataframes"]["fact_stock_snapshot"].iloc[0]["symbol"] == "AAPL"
+    assert result["rag_dict"]["alpaca_history"][0]["ticker"] == "AAPL"
+    assert result["dataframes"]["alpaca_live"].iloc[0]["ticker"] == "AAPL"

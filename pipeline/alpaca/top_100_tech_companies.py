@@ -1,45 +1,61 @@
 """Top 100 tech companies by market capitalization for all of our pipelines"""
 
-tech_universe = [
-    # Mega Cap Tech
-    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA",
+tech_universe = tech_universe = {
+    # Mega Cap Tech (The Core)
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "NVDA": "NVIDIA",
+    "AMZN": "Amazon",
+    "GOOGL": "Google",
+    "META": "Meta",
+    "TSLA": "Tesla",
 
     # Large Cap Platforms / Software
-    "NFLX", "ADBE", "CRM", "ORCL", "IBM", "INTU", "NOW", "CSCO",
+    "NFLX": "Netflix",
+    "ADBE": "Adobe",
+    "CRM": "Salesforce",
+    "ORCL": "Oracle",
+    "NOW": "ServiceNow",
+    "CSCO": "Cisco",
 
-    # Semiconductors (core hedge fund focus)
-    "AMD", "INTC", "AVGO", "QCOM", "TXN", "MU", "LRCX", "AMAT",
-    "KLAC", "MCHP", "NXPI", "MPWR", "SWKS", "QRVO", "TER", "ON",
+    # Semiconductors (High Impact Leaders)
+    "AVGO": "Broadcom",
+    "AMD": "AMD",
+    "INTC": "Intel",
+    "QCOM": "Qualcomm",
+    "AMAT": "Applied Materials",
 
-    # Networking / Infrastructure
-    "ANET", "CIEN", "JNPR",
-
-    # Hardware / Storage
-    "DELL", "HPQ", "NTAP", "STX", "WDC",
-
-    # Cloud / SaaS
-    "SNOW", "PLTR", "CRWD", "ZS", "OKTA", "DDOG", "NET", "MDB",
-    "HUBS", "SHOP", "TEAM", "WDAY", "VEEV", "DOCU", "TWLO",
-    "SPLK", "ESTC", "FSLY", "U", "PATH", "APP", "PCOR", "CFLT",
+    # Cloud / SaaS / Data
+    "SNOW": "Snowflake",
+    "PLTR": "Palantir",
+    "SHOP": "Shopify",
+    "TEAM": "Atlassian",
+    "WDAY": "Workday",
+    "MDB": "MongoDB",
 
     # Cybersecurity
-    "PANW", "FTNT", "CRWD", "ZS", "OKTA",
+    "PANW": "Palo Alto Networks",
+    "CRWD": "CrowdStrike",
+    "FTNT": "Fortinet",
 
     # Consumer Tech / Internet
-    "UBER", "ABNB", "DASH", "ROKU", "SPOT", "PYPL", "SQ", "ETSY",
+    "UBER": "Uber",
+    "ABNB": "Airbnb",
+    "SPOT": "Spotify",
+    "PYPL": "PayPal",
 
-    # Fintech
-    "AFRM", "COIN", "HOOD",
+    # Fintech / Emerging
+    "SOFI": "SoFi",
+    "COIN": "Coinbase",
+    "HOOD": "Robinhood",
+    "GTLB": "GitLab",
 
-    # Data / AI / Analytics
-    "SNPS", "CDNS", "AKAM",
+    # Hardware & Infrastructure
+    "DELL": "Dell",
+    "ANET": "Arista Networks",
 
-    # Gaming / Interactive
-    "EA", "TTWO", "RBLX",
-
-    # Emerging / Growth Tech (liquid enough)
-    "AI", "BILL", "GTLB", "MNDY", "S", "NEWR", "SMAR", "ASAN",
-
-    # Additional large/mid cap tech
-    "ZM", "DOCN", "PINS", "TWTR", "LYFT", "IOT", "CRNC", "VRNS"
-]
+    # Design & AI Ops
+    "SNPS": "Synopsys",
+    "CDNS": "Cadence",
+    "U": "Unity"
+}

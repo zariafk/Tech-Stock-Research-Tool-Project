@@ -46,12 +46,18 @@ def get_hn_historical(company_name: str) -> list[dict]:
 
         # Parse results into a standardized schema for downstream RAG consumption
         for hit in data.get('hits', [])[:HN_MAX_RESULTS]:
+            # Build a richer summary from available metadata (since Algolia doesn't provide descriptions)
+            points = hit.get('points', 0)
+            comments = hit.get('num_comments', 0)
+            author = hit.get('author', 'Unknown')
+            summary = f"[{author}] Points: {points} | Comments: {comments}"
+            
             article = {
                 'title': hit.get('title', 'N/A'),
                 # Try 'url' first, then 'story_url' (algonlia sometimes nests URLs differently)
                 'url': hit.get('url', hit.get('story_url', 'N/A')),
-                # Storing 'Points' in summary allows the LLM to weigh community consensus
-                'summary': f"Points: {hit.get('points', 0)}",
+                # Community engagement metrics as summary (HN specific: no article descriptions available)
+                'summary': summary,
                 'published_date': datetime.fromtimestamp(hit['created_at_i']).strftime('%Y-%m-%d %H:%M:%S'),
                 'source': 'algolia_hn',
             }

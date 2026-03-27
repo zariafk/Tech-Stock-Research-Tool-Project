@@ -4,13 +4,14 @@ from seed_historical.rss_extract_historical import (
     extract_historical
 )
 
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, APIError
 import os
 import dotenv
 import time
 import pandas as pd
 import json
 import hashlib
+import psycopg2
 from logger import logger
 from top_100_tech_companies import tech_universe
 from rss_load import get_connection, get_tickers_from_db
@@ -36,8 +37,11 @@ def get_existing_urls(urls: list[str]) -> set[str]:
             results = cur.fetchall()
         conn.close()
         return {row[0] for row in results}
-    except Exception as e:
-        logger.warning("Failed to check existing URLs in RDS: %s", e)
+    except psycopg2.OperationalError as e:
+        logger.error("Database connection error checking existing URLs: %s", e)
+        return set()
+    except psycopg2.Error as e:
+        logger.error("Database error checking existing URLs: %s", e)
         return set()
 
 
@@ -49,9 +53,11 @@ def get_ticker_companies_from_db() -> dict:
         conn.close()
         # Convert { ticker: {"stock_id": ..., "stock_name": ...} } to { ticker: "stock_name" }
         return {ticker: info["stock_name"] for ticker, info in stock_lookup.items()}
-    except Exception as e:
-        logger.warning(
-            f"Failed to get tickers from DB, falling back to tech_universe: {e}")
+    except psycopg2.OperationalError as e:
+        logger.error("Database connection error fetching tickers, using default tech_universe: %s", e)
+        return tech_universe
+    except (psycopg2.Error, KeyError, AttributeError) as e:
+        logger.error("Error processing tickers from DB, using default tech_universe: %s", e)
         return tech_universe
 
 
@@ -138,8 +144,11 @@ def parse_relevance_data(response: str) -> list[dict]:
                     "analysis": item.get('why')
                 })
         return results
-    except Exception as e:
-        logger.error(f"Failed to parse OpenAI response: {e}. Raw: {response}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON from OpenAI response: {e}. Raw: {response}")
+        return []
+    except (KeyError, TypeError, AttributeError) as e:
+        logger.error(f"Unexpected structure in OpenAI response: {e}. Raw: {response}")
         return []
 
 
@@ -155,14 +164,22 @@ def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -
                 messages=[{'role': 'user', 'content': prompt}]
             )
             return parse_relevance_data(response.choices[0].message.content)
-        except Exception as e:
-            if 'rate_limit' in str(e).lower() and attempt < max_retries - 1:
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
                 backoff = 2 ** attempt
                 logger.warning(
-                    f'Rate limited. Retrying in {backoff}s... (attempt {attempt + 1}/{max_retries})')
+                    f'OpenAI rate limited. Retrying in {backoff}s... (attempt {attempt + 1}/{max_retries})')
                 time.sleep(backoff)
             else:
-                logger.error(f'OpenAI error after {attempt + 1} attempts: {e}')
+                logger.error(f'OpenAI rate limit persisted after {max_retries} attempts: {e}')
+                return []
+        except APIError as e:
+            logger.error(f'OpenAI API error on attempt {attempt + 1}: {e}')
+            if attempt < max_retries - 1:
+                backoff = 2 ** attempt
+                logger.info(f'Retrying in {backoff}s...')
+                time.sleep(backoff)
+            else:
                 return []
 
 

@@ -11,6 +11,12 @@ resource "aws_lambda_function" "ingest_lambda" {
     image_uri     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.eu-west-2.amazonaws.com/c22-stocksiphon-ingest-lambda:latest"
     timeout       = 60
     memory_size   = 512
+
+    environment {
+        variables = {
+            SECRET_NAME = "c22-trade-research-tool-secrets"
+        }
+    }
 }
 
 # Query Lambda function - responsible for handling user queries, retrieving relevant data, and generating responses using the LLM
@@ -21,4 +27,10 @@ resource "aws_lambda_function" "query_lambda" {
     image_uri     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.eu-west-2.amazonaws.com/c22-stocksiphon-query-lambda:latest"
     timeout       = 60
     memory_size   = 512
+
+    environment {
+        variables = {
+            SECRET_NAME = "c22-trade-research-tool-secrets"
+        }
+    }
 }

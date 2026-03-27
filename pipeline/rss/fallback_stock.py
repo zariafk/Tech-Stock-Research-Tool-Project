@@ -1,4 +1,4 @@
-"""Top 100 tech companies by market capitalization for all of our pipelines"""
+"""Fallback list of top tech companies to match against article keywords, if no tickers found in title/summary."""
 
 # Map Ticker to Full Company Name for accurate keyword matching
 tech_universe = {

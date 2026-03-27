@@ -6,7 +6,9 @@ RUN pip3 install -r requirements.txt
 
 COPY rss_pipeline.py .
 
-COPY rss_extract.py .
+COPY rss_extract_live.py .
+
+COPY rss_analysis.py .
 
 COPY rss_transform.py .
 

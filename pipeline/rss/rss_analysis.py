@@ -13,7 +13,7 @@ import json
 import hashlib
 import psycopg2
 from logger import logger
-from top_100_tech_companies import tech_universe
+from pipeline.rss.fallback_stock import tech_universe
 from rss_load import get_connection, get_tickers_from_db
 
 dotenv.load_dotenv()

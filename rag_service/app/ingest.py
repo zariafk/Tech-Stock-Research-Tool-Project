@@ -47,7 +47,9 @@ def convert_to_documents(data: list, source: str) -> list:
         else:
             continue
 
-        if document is not None:
+        if isinstance(document, list):
+            documents.extend(document)
+        elif document is not None:
             documents.append(document)
 
     return documents

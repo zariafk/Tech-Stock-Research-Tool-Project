@@ -1,56 +1,55 @@
-# RSS & News Pipeline
+# RSS Pipeline
 
-Automated extraction and sentiment analysis for the top 100 tech companies. Designed for hourly AWS Lambda execution.
+ETL pipeline that extracts tech news from RSS feeds, enriches with OpenAI relevance/sentiment scoring, and loads to PostgreSQL.
 
-## Features
-- **Live/Historical**: Merges TechCrunch RSS (live) with Hacker News Algolia API (historical).
-- **Smart Filter**: Pre-filters by keyword before calling OpenAI to minimize costs.
-- **AI Enrichment**: Uses GPT-4o-mini for ticker-specific relevance scoring (0-10) and sentiment (-1.0 to 1.0).
-- **Persistent Deduplication**: Generates MD5 article_id from links to prevent duplicate S3 entries across runs.
+## Quick Start
 
-## Setup
-1. Create .env: OPENAI_API_KEY=your_key
-2. Install dependencies: pip install -r ../requirements.txt
+### Setup
+```bash
+pip install -r requirements.txt
+export OPENAI_API_KEY=your_key
+```
 
-Seed the database by running
-`python3 seed_rss_table.py`
+### First Run
+Initialize the database:
+```bash
+python3 seed_rss_table.py
+```
 
-## Usage
-- Run Extraction: python rss_extract.py (saves test_results_*.csv locally for verification)
-- Transform: rss_transform.py cleans and prepares data for storage
+### Run Pipeline
+```bash
+python3 rss_pipeline.py
+```
 
-## Logic Flow
-1. Extract: Pull raw articles from RSS and HN.
-2. Deduplicate: Filter unique links.
-3. Filter: Match against top_100_tech_companies.py.
-4. Analyze: OpenAI determines Relevance & Sentiment.
-5. Output: Standardized DataFrame for S3.
+Or trigger via AWS Lambda (see `lambda_handler()` in [rss_pipeline.py](rss_pipeline.py)).
 
-## Analysis
--     Act as: Senior Quant Analyst.
-    Universe: {", ".join(tickers)}
-    Input: "{entry['title']}" | "{entry['summary']}"
+## Pipeline Steps
 
-    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
+| Step | File | Purpose |
+|------|------|---------|
+| Extract | [rss_extract_live.py](rss_extract_live.py) | Pulls from TechCrunch & HackerNews RSS feeds; deduplicates against RDS |
+| Analyze | [rss_analysis.py](rss_analysis.py) | Scores relevance (0-10) & sentiment (-1.0 to 1.0) using OpenAI GPT-4o-mini |
+| Transform | [rss_transform.py](rss_transform.py) | Standardizes schema; validates required columns |
+| Load | [rss_load.py](rss_load.py) | Inserts to `rss_article` & `story_stock` tables; ON CONFLICT handles duplicates |
 
-    Relevance Rubric:
-    - 10: Direct idiosyncratic event (Earnings, M&A).
-    - 8: Significant business news (New product, contract).
-    - 7: Indirect impact (Competitor/Sector news).
-    - <7: Ignore.
+## Files
 
-    Sentiment Rubric (Strictly use these values):
-    - 1.0: Transformational positive news.
-    - 0.5: Incremental/Standard positive news.
-    - 0.0: Neutral/Mixed news.
-    - -0.5: Incremental negative news.
-    - -1.0: Catastrophic negative news.
+- **[rss_pipeline.py](rss_pipeline.py)** – Main orchestrator; entry point for local/Lambda execution
+- **[rss_extract_live.py](rss_extract_live.py)** – RSS feed extraction with RDS deduplication check
+- **[rss_analysis.py](rss_analysis.py)** – OpenAI enrichment for relevance & sentiment
+- **[rss_transform.py](rss_transform.py)** – Data cleaning & schema validation
+- **[rss_load.py](rss_load.py)** – PostgreSQL insertion with conflict handling
+- **[fallback_stock.py](fallback_stock.py)** – Tech universe ticker list
+- **[seed_rss_table.py](seed_rss_table.py)** – Database initialization script
 
-    Output Format (JSON list):
-    [{{
-      "t": "TICKER",
-      "r": [score],
-      "s": [score],
-      "why": "one sentence justification"
-    }}]
-    """
+## Testing
+
+```bash
+python3 -m pytest test/test_rss_extract.py
+python3 -m pytest test/test_rss_transform.py
+```
+
+## Environment Variables
+
+- `OPENAI_API_KEY` – OpenAI API key
+- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` – RDS credentials (local dev only; Lambda uses Secrets Manager)

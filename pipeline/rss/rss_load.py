@@ -2,7 +2,7 @@
 
 Inserts into:
   - rss_article: title, url, summary, published_date, source
-  - story_stock: stock_id, sentiment_score, relevance_score, analysis, story_type='rss'
+  - rss_analysis: story_id, stock_id, sentiment_score, relevance_score, analysis
 
 Deduplication: ON CONFLICT on url (unique article = unique url).
 """
@@ -59,7 +59,7 @@ def get_tickers_from_db(conn) -> dict:
 
 
 def load(df: pd.DataFrame) -> int:
-    """Insert articles into rss_article and story_stock tables.
+    """Insert articles into rss_article and rss_analysis tables.
 
     Returns the number of net new articles inserted.
     """
@@ -110,12 +110,12 @@ def load(df: pd.DataFrame) -> int:
 
                 story_id = result[0]
 
-                # Insert into story_stock with story_type = 'rss'
+                # Insert into rss_analysis
                 cur.execute(
                     """
-                    INSERT INTO story_stock
-                        (story_id, stock_id, sentiment_score, relevance_score, analysis, story_type)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO rss_analysis
+                        (story_id, stock_id, sentiment_score, relevance_score, analysis)
+                    VALUES (%s, %s, %s, %s, %s)
                     """,
                     (
                         story_id,
@@ -123,7 +123,6 @@ def load(df: pd.DataFrame) -> int:
                         row.get("sentiment"),
                         row.get("relevance_score"),
                         row.get("analysis"),
-                        "rss",
                     ),
                 )
                 total_net_new += 1

@@ -60,7 +60,7 @@ def get_hn_historical(company_name: str) -> list[dict]:
                 'url': hit.get('url', hit.get('story_url', 'N/A')),
                 'summary': summary,
                 'published_date': datetime.fromtimestamp(hit['created_at_i']).strftime('%Y-%m-%d %H:%M:%S'),
-                'source': 'algolia_hn',
+                'source': 'hackernews',
             }
             articles.append(article)
 

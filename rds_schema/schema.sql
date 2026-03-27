@@ -1,7 +1,8 @@
 -- ============================================================
 -- Tech Stock Research Tool — PostgreSQL Schema
 -- ============================================================
-DROP TABLE IF EXISTS story_stock CASCADE;
+DROP TABLE IF EXISTS reddit_analysis CASCADE;
+DROP TABLE IF EXISTS rss_analysis CASCADE;
 DROP TABLE IF EXISTS reddit_post CASCADE;
 DROP TABLE IF EXISTS subreddit CASCADE;
 DROP TABLE IF EXISTS rss_article CASCADE;
@@ -28,13 +29,13 @@ CREATE TABLE IF NOT EXISTS rss_article (
 
 -- Reddit posts
 CREATE TABLE IF NOT EXISTS subreddit (
-    subreddit_id          SERIAL PRIMARY KEY,
-    subreddit_name        BIGINT,
+    subreddit_id          VARCHAR(500) PRIMARY KEY,
+    subreddit_name        VARCHAR(500),
     subreddit_subscribers BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS reddit_post (
-    post_id       SERIAL PRIMARY KEY,
+    post_id       VARCHAR(500) PRIMARY KEY,
     title         VARCHAR(500),
     contents      TEXT,
     flair         VARCHAR(255),
@@ -46,18 +47,27 @@ CREATE TABLE IF NOT EXISTS reddit_post (
     created_at    TIMESTAMP,
     permalink     VARCHAR(1000),
     url           VARCHAR(1000),
-    subreddit_id  BIGINT REFERENCES subreddit(subreddit_id)
+    subreddit_id  VARCHAR(500) REFERENCES subreddit(subreddit_id)
 );
 
--- Junction table: links stories (rss or reddit) to stocks with AI analysis
-CREATE TABLE IF NOT EXISTS story_stock (
-    story_id         INT NOT NULL,
+-- RSS article analysis: AI-enriched data
+CREATE TABLE IF NOT EXISTS rss_analysis (
+    story_id         INT NOT NULL REFERENCES rss_article(story_id),
     stock_id         INT NOT NULL REFERENCES stock(stock_id),
     sentiment_score  FLOAT,
     relevance_score  FLOAT,
     analysis         TEXT,
-    story_type       VARCHAR(50) NOT NULL,
-    PRIMARY KEY (story_id, stock_id, story_type)
+    PRIMARY KEY (story_id, stock_id)
+);
+
+-- Reddit post analysis: AI-enriched data
+CREATE TABLE IF NOT EXISTS reddit_analysis (
+    story_id         VARCHAR(500) NOT NULL REFERENCES reddit_post(post_id),
+    stock_id         INT NOT NULL REFERENCES stock(stock_id),
+    sentiment_score  FLOAT,
+    relevance_score  FLOAT,
+    analysis         TEXT,
+    PRIMARY KEY (story_id, stock_id)
 );
 
 -- Alpaca live snapshot (latest quote per stock)

@@ -1,4 +1,3 @@
-from datetime import datetime
 import json
 
 
@@ -46,50 +45,37 @@ def convert_to_documents(data, source):
 
 def normalize_alpaca_summary(record) -> dict | None:
     """Normalize Alpaca stock summary data into a document format."""
-    alpaca = record.get("alpaca")
-    stock = record.get("stock")
+    ticker = record.get("ticker")
 
-    if not alpaca or not stock:
+    raw_time = record.get("bar_date") or record.get("latest_time")
+
+    if not raw_time:
         return None
 
-    ticker = stock.get("ticker")
-    stock_name = stock.get("stock_name")
+    date = raw_time.split("T")[0]
 
-    date = alpaca.get("date")  # or derive from timestamp
-    open_price = alpaca.get("open")
-    high = alpaca.get("high")
-    low = alpaca.get("low")
-    close = alpaca.get("close")
-    volume = alpaca.get("volume")
-
-    if not ticker or not date or close is None:
+    if not ticker or not date:
         return None
 
-    # basic derived metric
-    change_pct = None
-    if open_price and close:
-        change_pct = ((close - open_price) / open_price) * 100
+    stock_name = ticker
 
-    # Build text (this is what gets embedded)
+    metrics = {
+        "open": record.get("open"),
+        "high": record.get("high"),
+        "low": record.get("low"),
+        "close": record.get("close"),
+        "volume": record.get("volume")
+    }
+
     text = f"{stock_name} ({ticker}) on {date}. "
 
-    if open_price is not None:
-        text += f"Open {open_price}. "
+    for metric_name, metric_value in metrics.items():
+        if metric_value is not None:
+            text += f"{metric_name} {metric_value}. "
 
-    if high is not None:
-        text += f"High {high}. "
-
-    if low is not None:
-        text += f"Low {low}. "
-
-    if close is not None:
-        text += f"Close {close}. "
-
-    if volume is not None:
-        text += f"Volume {volume}. "
-
-    if open_price is not None and close is not None:
-        change_pct = ((close - open_price) / open_price) * 100
+    if metrics["open"] is not None and metrics["close"] is not None:
+        change_pct = (
+            (metrics["close"] - metrics["open"]) / metrics["open"]) * 100
         text += f"Change {round(change_pct, 2)} percent. "
 
     return {

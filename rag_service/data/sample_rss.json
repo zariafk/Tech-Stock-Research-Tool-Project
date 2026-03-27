@@ -1,0 +1,26 @@
+[
+    {
+        "id": "1",
+        "text": "Nvidia stock surged after earnings as strong AI demand boosted results.",
+        "metadata": {
+            "ticker": "NVDA",
+            "source": "rss",
+            "published_date": "2026-03-26T10:00:00Z",
+            "link": "https://example.com/nvda-news",
+            "relevance_score": 0.95,
+            "sentiment": "positive"
+        }
+    },
+    {
+        "id": "2",
+        "text": "Apple may face softer iPhone demand this quarter according to recent reports.",
+        "metadata": {
+            "ticker": "AAPL",
+            "source": "rss",
+            "published_date": "2026-03-26T11:00:00Z",
+            "link": "https://example.com/aapl-news",
+            "relevance_score": 0.72,
+            "sentiment": "negative"
+        }
+    }
+]

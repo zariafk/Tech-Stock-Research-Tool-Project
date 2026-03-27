@@ -85,59 +85,12 @@ def build_dim_subreddits(
     return dim
 
 
-def deduplicate(
-    df: pd.DataFrame,
-    existing_ids: set[str],
-    id_column: str = "id",
-) -> pd.DataFrame:
-    """Removes rows whose ID already exists in the existing dataset."""
-    before = len(df)
-    df = df[~df[id_column].isin(existing_ids)]
-    removed = before - len(df)
-
-    if removed:
-        logger.info("Removed %d duplicate rows, %d new rows remaining",
-                    removed, len(df))
-    return df
-
-
-# def transform_main(
-#     raw_posts: list[dict],
-#     *,
-#     fact_columns: list[str],
-#     dim_columns: list[str],
-#     required_columns: list[str],
-# ) -> tuple[pd.DataFrame, pd.DataFrame]:
-#     """Runs the full transform pipeline and returns (fact_posts, dim_subreddits)."""
-#     if not raw_posts:
-#         logger.warning("No posts to transform")
-#         empty_fact = pd.DataFrame(columns=fact_columns)
-#         empty_dim = pd.DataFrame(columns=dim_columns)
-#         return empty_fact, empty_dim
-
-#     df = flatten_post_data(raw_posts)
-
-#     all_columns = list(set(fact_columns + dim_columns))
-#     df = df.reindex(columns=all_columns)
-
-#     df = drop_missing_required(df, required_columns)
-#     df = validate_numeric_ranges(df)
-#     df = convert_timestamps(df)
-
-#     fact_posts = build_fact_posts(df, fact_columns)
-#     dim_subreddits = build_dim_subreddits(df, dim_columns)
-
-#     return fact_posts, dim_subreddits
-
-
 def transform_main(
     raw_posts: list[dict],
     *,
     fact_columns: list[str],
     dim_columns: list[str],
     required_columns: list[str],
-    existing_post_ids: set[str] | None = None,
-    existing_subreddit_ids: set[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Runs the full transform pipeline and returns (fact_posts, dim_subreddits)."""
     if not raw_posts:
@@ -158,15 +111,4 @@ def transform_main(
     fact_posts = build_fact_posts(df, fact_columns)
     dim_subreddits = build_dim_subreddits(df, dim_columns)
 
-    # Deduplicate against existing bucket data if provided
-    if existing_post_ids is not None:
-        fact_posts = deduplicate(fact_posts, existing_post_ids, "id")
-    if existing_subreddit_ids is not None:
-        dim_subreddits = deduplicate(
-            dim_subreddits, existing_subreddit_ids, "subreddit_id")
-
     return fact_posts, dim_subreddits
-
-# mappings = load_mappings()
-# tickers = mappings["symbol"].tolist()
-# print(tickers)

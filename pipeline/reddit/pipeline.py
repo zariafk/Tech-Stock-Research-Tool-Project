@@ -11,7 +11,7 @@ from extract import extract_main
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
 from analysis import analyse_posts
-from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json
+from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json, get_stock_id_map, build_story_stock_df
 
 dotenv.load_dotenv()
 
@@ -32,6 +32,13 @@ FACT_POSTS_COLUMNS = [
     "ups", "upvote_ratio", "num_comments", "author",
     "created_utc", "permalink", "url", "subreddit_id",
 ]
+
+FACT_POSTS_RENAME = {
+    "id": "post_id",
+    "selftext": "contents",
+    "link_flair_text": "flair",
+    "created_utc": "created_at",
+}
 
 DIM_SUBREDDITS_COLUMNS = [
     "subreddit_id", "subreddit", "subreddit_subscribers",
@@ -54,7 +61,7 @@ def run_pipeline() -> None:
         raw_posts = extract_main(SUBREDDITS, include_comments=False)
 
         logger.info("Deduplicating raw posts")
-        existing_post_ids = get_existing_ids(conn, "fact_posts", "id")
+        existing_post_ids = get_existing_ids(conn, "reddit_post", "post_id")
         raw_posts = deduplicate_raw_posts(raw_posts, existing_post_ids)
 
         logger.info("Starting transform")
@@ -64,6 +71,8 @@ def run_pipeline() -> None:
             dim_columns=DIM_SUBREDDITS_COLUMNS,
             required_columns=REQUIRED_COLUMNS,
         )
+
+        fact_posts = fact_posts.rename(columns=FACT_POSTS_RENAME)
 
         logger.info("Starting analysis")
         fact_post_tickers = analyse_posts(
@@ -79,16 +88,21 @@ def run_pipeline() -> None:
             fact_posts, dim_subreddits, fact_post_tickers)
 
         print(result)
+
+        logger.info("Starting load")
+
+        # stock_id_map = get_stock_id_map(conn)
+        # story_stock = build_story_stock_df(fact_post_tickers, stock_id_map)
+
         # load_main(
         #     {
         #         "fact_posts": fact_posts,
-        #         "dim_subreddits": dim_subreddits,
-        #         "fact_post_tickers": fact_post_tickers,
+        #         "subreddit": dim_subreddits,
+        #         "story_stock": story_stock,
         #     },
         #     conn=conn,
         # )
-
-        logger.info("Pipeline complete")
+        # logger.info("Pipeline complete")
 
     finally:
         conn.close()

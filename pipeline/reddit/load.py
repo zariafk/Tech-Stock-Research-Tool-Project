@@ -90,9 +90,59 @@ def join_tables_to_json(
     )
 
     for record in records:
-        record["tickers"] = ticker_groups.get(record["id"], [])
+        record["tickers"] = ticker_groups.get(record["post_id"], [])
 
     return records
+
+
+def get_stock_id_map(
+    conn: psycopg2.extensions.connection,
+) -> dict[str, int]:
+    """Fetches a ticker-to-stock_id mapping from the stock table."""
+    query = "SELECT stock_id, ticker FROM stock"
+
+    with conn.cursor() as cur:
+        cur.execute(query)
+        rows = cur.fetchall()
+
+    return {ticker: stock_id for stock_id, ticker in rows}
+
+
+def build_story_stock_df(
+    fact_post_tickers: pd.DataFrame,
+    stock_id_map: dict[str, int],
+    story_type: str = "reddit",
+) -> pd.DataFrame:
+    """Maps fact_post_tickers into the story_stock schema."""
+    if fact_post_tickers.empty:
+        return pd.DataFrame(columns=[
+            "story_id", "stock_id", "sentiment_score",
+            "relevance_score", "analysis", "story_type",
+        ])
+
+    df = fact_post_tickers.copy()
+
+    # Map ticker to stock_id, drop rows with no match
+    df["stock_id"] = df["ticker"].map(stock_id_map)
+    unmatched = df["stock_id"].isna().sum()
+    if unmatched:
+        logger.warning(
+            "Dropped %d rows with unrecognised tickers", unmatched
+        )
+    df = df.dropna(subset=["stock_id"])
+    df["stock_id"] = df["stock_id"].astype(int)
+
+    df = df.rename(columns={
+        "post_id": "story_id",
+        "sentiment": "sentiment_score",
+    })
+
+    df["story_type"] = story_type
+
+    return df[[
+        "story_id", "stock_id", "sentiment_score",
+        "relevance_score", "analysis", "story_type",
+    ]]
 
 
 def load_main(

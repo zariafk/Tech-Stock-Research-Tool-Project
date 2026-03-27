@@ -18,7 +18,7 @@ def format_ticker_prompt(post: dict, tickers: list[str]) -> str:
     return f"""
     Act as: Senior Quant Analyst.
     Universe: {", ".join(tickers)}
-    Input: "{post['title']}" | "{post['selftext']}"
+    Input: "{post['title']}" | "{post['contents']}"
 
     Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
 
@@ -45,7 +45,7 @@ def extract_keywords(
     ticker_companies: dict[str, str],
 ) -> list[str]:
     """Finds tickers mentioned via keyword match in title and selftext."""
-    text = f"{post['title']} {post['selftext']}".lower()
+    text = f"{post['title']} {post['contents']}".lower()
     return [
         ticker for ticker, company in ticker_companies.items()
         if ticker.lower() in text or company.lower() in text
@@ -144,7 +144,7 @@ def analyse_posts(
 
         for result in results:
             rows.append({
-                "post_id": post_dict["id"],
+                "post_id": post_dict["post_id"],
                 "ticker": result["ticker"],
                 "relevance_score": result["relevance_score"],
                 "sentiment": result["sentiment"],

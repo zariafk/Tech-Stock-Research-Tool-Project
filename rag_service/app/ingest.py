@@ -116,49 +116,56 @@ def normalize_alpaca_historical_record(record: dict) -> dict | None:
     }
 
 
-def normalize_reddit_record(record: dict) -> dict | None:
-    """Normalize a Reddit post record into a document format."""
-    post = record.get("reddit_post")
-    stock = record.get("stock")
-
-    if not post or not stock:
-        return None
-
-    ticker = stock.get("ticker")
-    stock_name = stock.get("stock_name")
-
-    title = post.get("title", "")
-    body = post.get("contents", "")
-    flair = post.get("flair")
-    score = post.get("score")
-    ups = post.get("ups")
-    upvote_ratio = post.get("upvote_ratio")
-    num_comments = post.get("num_comments")
-    created_at = post.get("created_at")
-    url = post.get("url")
-    subreddit_id = post.get("subreddit_id")
+def normalize_reddit_record(record: dict) -> list[dict]:
+    """Normalize a Reddit post into one document per ticker."""
+    title = record.get("title", "")
+    body = record.get("contents", "")
+    flair = record.get("flair")
+    score = record.get("score")
+    ups = record.get("ups")
+    upvote_ratio = record.get("upvote_ratio")
+    num_comments = record.get("num_comments")
+    author = record.get("author")
+    created_at = record.get("created_at")
+    url = record.get("url")
+    permalink = record.get("permalink")
+    subreddit_id = record.get("subreddit_id")
+    subreddit_name = record.get("subreddit_name")
+    subreddit_subscribers = record.get("subreddit_subscribers")
+    post_id = record.get("post_id")
+    tickers = record.get("tickers", [])
 
     if not title and not body:
-        return None
+        return []
 
     text = f"{title}. {body}".strip()
 
     if flair:
         text += f" Flair: {flair}"
 
-    return {
-        "text": text,
-        "metadata": {
-            "source": "reddit",
-            "ticker": ticker,
-            "stock_name": stock_name,
-            "timestamp": created_at,
-            "url": url,
-            "subreddit_id": subreddit_id,
-            "flair": flair,
-            "score": score,
-            "ups": ups,
-            "upvote_ratio": upvote_ratio,
-            "num_comments": num_comments
-        }
-    }
+    documents = []
+
+    for ticker in tickers:
+        documents.append({
+            "id": f"reddit_{post_id}_{ticker}",
+            "text": text,
+            "metadata": {
+                "source": "reddit",
+                "ticker": ticker,
+                "timestamp": created_at,
+                "url": url,
+                "permalink": permalink,
+                "post_id": post_id,
+                "author": author,
+                "subreddit_id": subreddit_id,
+                "subreddit_name": subreddit_name,
+                "subreddit_subscribers": subreddit_subscribers,
+                "flair": flair,
+                "score": score,
+                "ups": ups,
+                "upvote_ratio": upvote_ratio,
+                "num_comments": num_comments
+            }
+        })
+
+    return documents

@@ -1,12 +1,13 @@
 """Main pipeline orchestrator."""
 
+from datetime import datetime, timezone
 import logging
 import os
 import json
 
 from openai import OpenAI
 
-from extract import extract_main
+from historical_extract import extract_historical
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
 from analysis import analyse_posts
@@ -61,7 +62,11 @@ def run_pipeline() -> None:
 
     try:
         logger.info("Starting extract")
-        raw_posts = extract_main(SUBREDDITS, include_comments=False)
+        raw_posts = extract_historical(
+            SUBREDDITS,
+            start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 27, tzinfo=timezone.utc),
+        )
 
         logger.info("Deduplicating raw posts")
         existing_post_ids = get_existing_ids(conn, "reddit_post", "post_id")
@@ -118,11 +123,6 @@ def run_pipeline() -> None:
 
     finally:
         conn.close()
-
-
-def lambda_handler(event, context):
-    """Allows the lambda function to run the pipeline."""
-    run_pipeline()
 
 
 if __name__ == "__main__":

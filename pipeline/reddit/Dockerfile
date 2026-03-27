@@ -6,6 +6,7 @@ RUN pip3 install -r requirements.txt
 
 COPY extract.py .
 COPY deduplicate.py .
+COPY analysis.py .
 COPY transform.py .
 COPY load.py .
 COPY pipeline.py .

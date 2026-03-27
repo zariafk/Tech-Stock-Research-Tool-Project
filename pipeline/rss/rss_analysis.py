@@ -1,5 +1,6 @@
 """OpenAI-powered analysis of RSS articles for ticker relevance and sentiment."""
 
+import boto3
 from openai import OpenAI, RateLimitError, APIError
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -65,11 +66,27 @@ TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
 MAX_WORKERS = 10  # Concurrent OpenAI threads to respect rate limits
 
-CLIENT = OpenAI(
-    api_key=os.environ.get(
-        'OPENAI_API_KEY'
-    )
-)
+
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
+
+
+def get_openai_client() -> OpenAI:
+    """Initialize OpenAI client using API key from AWS Secrets Manager."""
+    try:
+        secret = get_secret("c22-trade-research-tool-secrets")
+        api_key = secret.get('api_key') or secret.get('OPENAI_API_KEY')
+        return OpenAI(api_key=api_key)
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve OpenAI API key from Secrets Manager: %s", e)
+        raise
+
+
+CLIENT = get_openai_client()
 
 
 def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:

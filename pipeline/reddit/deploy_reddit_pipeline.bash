@@ -2,7 +2,7 @@
 
 set -e
 # change placeholders to your values
-AWS_ACCOUNT_ID=129033205317
+AWS_ACCOUNT_ID=<aws-account-id>
 REGION="eu-west-2"
 REPO_NAME=<repo-name>
 TAG="latest"

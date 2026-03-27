@@ -48,39 +48,54 @@ def convert_to_documents(data: list, source: str) -> list:
     return documents
 
 
-def normalize_alpaca_summary(record: dict) -> dict | None:
+def normalize_alpaca_live_record(record) -> dict | None:
+    ticker = record.get("ticker")
+    timestamp = record.get("latest_time")
+
+    if not ticker or not timestamp:
+        return None
+
+    text = f"{ticker} at {timestamp}. "
+
+    metrics = ["open", "high", "low", "close", "volume"]
+    for metric in metrics:
+        if record.get(metric) is not None:
+            text += f"{metric.capitalize()} {record[metric]}. "
+
+    return {
+        "id": f"alpaca_live_{ticker}_{timestamp}",
+        "text": text.strip(),
+        "metadata": {
+            "source": "alpaca",
+            "ticker": ticker,
+            "timestamp": timestamp,
+            "doc_type": "live_bar"
+        }
+    }
+
+
+def normalize_alpaca_historical_record(record: dict) -> dict | None:
     """Normalize Alpaca stock summary data into a document format."""
     ticker = record.get("ticker")
 
-    raw_time = record.get("bar_date") or record.get("latest_time")
-
-    if not raw_time:
-        return None
-
-    date = raw_time.split("T")[0]
+    date = record.get("bar_date")
 
     if not ticker or not date:
         return None
 
     stock_name = ticker
 
-    metrics = {
-        "open": record.get("open"),
-        "high": record.get("high"),
-        "low": record.get("low"),
-        "close": record.get("close"),
-        "volume": record.get("volume")
-    }
-
     text = f"{stock_name} ({ticker}) on {date}. "
 
-    for metric_name, metric_value in metrics.items():
-        if metric_value is not None:
-            text += f"{metric_name} {metric_value}. "
+    metrics = ["open", "high", "low", "close", "volume"]
 
-    if metrics["open"] is not None and metrics["close"] is not None:
+    for metric in metrics:
+        if record.get(metric) is not None:
+            text += f"{metric.capitalize()} {record[metric]}. "
+
+    if record.get("open") is not None and record.get("close") is not None:
         change_pct = (
-            (metrics["close"] - metrics["open"]) / metrics["open"]) * 100
+            (record["close"] - record["open"]) / record["open"]) * 100
         text += f"Change {round(change_pct, 2)} percent. "
 
     return {

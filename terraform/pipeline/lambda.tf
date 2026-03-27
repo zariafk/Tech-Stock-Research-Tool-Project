@@ -47,8 +47,8 @@ resource "aws_iam_role_policy_attachment" "c22_stocksiphon_lambda_ecr_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-data "aws_secretsmanager_secret" "c22_stocksiphon_api_keys" {
-  name = "c22-stocksiphon-api-keys"
+data "aws_secretsmanager_secret" "c22_trade_research_tool_secrets" {
+  name = "c22-trade-research-tool-secrets"
 }
 
 resource "aws_iam_role_policy" "c22_stocksiphon_lambda_secrets_policy" {
@@ -60,7 +60,7 @@ resource "aws_iam_role_policy" "c22_stocksiphon_lambda_secrets_policy" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
-      Resource = data.aws_secretsmanager_secret.c22_stocksiphon_api_keys.arn
+      Resource = data.aws_secretsmanager_secret.c22_trade_research_tool_secrets.arn
     }]
   })
 }

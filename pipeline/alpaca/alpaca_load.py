@@ -6,10 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
-from dotenv import load_dotenv
+from config import get_secret
 from logger import logger
-
-load_dotenv()
 
 HISTORY_COLUMNS = [
     "stock_id", "bar_date", "open", "high", "low",
@@ -24,11 +22,13 @@ SSL_CERT_PATH = os.path.join(os.path.dirname(__file__), "global-bundle.pem")
 
 
 def get_rds_connection():
-    """Open a new psycopg2 connection using credentials from the environment."""
+    """Open a new psycopg2 connection using credentials from Secrets Manager."""
+    secrets = get_secret()
+
     connection = psycopg2.connect(
-        host=os.environ["RDS_HOST"], port=os.environ.get("RDS_PORT", "5432"),
-        dbname=os.environ["RDS_DB"], user=os.environ["RDS_USER"],
-        password=os.environ["RDS_PASSWORD"],
+        host=secrets["host"], port=secrets.get("port", "5432"),
+        dbname=secrets["dbname"], user=secrets["username"],
+        password=secrets["password"],
         sslmode="verify-full", sslrootcert=SSL_CERT_PATH)
 
     return connection

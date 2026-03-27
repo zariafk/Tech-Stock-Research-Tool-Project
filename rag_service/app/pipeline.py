@@ -55,8 +55,6 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None) -> s
     if not retrieved_docs:
         return "I do not have enough information to answer that question."
 
-    print("RETRIEVED DOCS:", retrieved_docs)
-
     context = build_context(retrieved_docs)
 
     task_type = get_task_type(user_query)

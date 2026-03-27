@@ -14,7 +14,7 @@ def main():
     ingest_data(source="rss", data_path="data/sample_rss.json")
     ingest_data(source="reddit", data_path="data/sample_reddit.json")
 
-    query = "What is happening with NVDA?"
+    query = "Summarise if it is best to buy NVDA?"
     answer = answer_query(query, sources=["reddit", "rss", "alpaca"])
     print(answer)
 

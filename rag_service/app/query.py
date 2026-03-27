@@ -57,7 +57,8 @@ def generate_summary_prompt(query: str, context: str) -> str:
     - include dates/times where relevant
     - not include information not in the context
 
-    Never give financial advice.
+    Never give financial advice. If you are asked to give financial advice, clearly state that you cannot provide it. 
+    Ensure the summary is in plain english, and encapsulates factual information.
     """
 
 

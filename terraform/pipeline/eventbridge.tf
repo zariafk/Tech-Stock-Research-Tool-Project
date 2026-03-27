@@ -33,8 +33,9 @@ resource "aws_iam_role_policy" "c22_stocksiphon_scheduler_lambda_policy" {
 }
 
 resource "aws_scheduler_schedule" "c22_stocksiphon_rss_schedule" {
-  name                = "c22-stocksiphon-rss-schedule"
-  schedule_expression = "cron(0/20 * * * ? *)"
+  name                         = "c22-stocksiphon-rss-schedule"
+  schedule_expression          = "cron(0/20 12-22 ? * 1-5 *)"
+  schedule_expression_timezone = "UTC"
 
   flexible_time_window {
     mode = "OFF"
@@ -47,8 +48,9 @@ resource "aws_scheduler_schedule" "c22_stocksiphon_rss_schedule" {
 }
 
 resource "aws_scheduler_schedule" "c22_stocksiphon_alpaca_schedule" {
-  name                = "c22-stocksiphon-alpaca-schedule"
-  schedule_expression = "cron(0/20 * * * ? *)"
+  name                         = "c22-stocksiphon-alpaca-schedule"
+  schedule_expression          = "cron(0/20 12-22 ? * 1-5 *)"
+  schedule_expression_timezone = "UTC"
 
   flexible_time_window {
     mode = "OFF"
@@ -61,8 +63,9 @@ resource "aws_scheduler_schedule" "c22_stocksiphon_alpaca_schedule" {
 }
 
 resource "aws_scheduler_schedule" "c22_stocksiphon_reddit_schedule" {
-  name                = "c22-stocksiphon-reddit-schedule"
-  schedule_expression = "cron(0/20 * * * ? *)"
+  name                         = "c22-stocksiphon-reddit-schedule"
+  schedule_expression          = "cron(0/20 12-22 ? * 1-5 *)"
+  schedule_expression_timezone = "UTC"
 
   flexible_time_window {
     mode = "OFF"

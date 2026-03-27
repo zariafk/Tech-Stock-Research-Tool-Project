@@ -3,7 +3,7 @@ resource "aws_lambda_function" "c22_stocksiphon_rss_lambda" {
   role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
   image_uri     = "${aws_ecr_repository.c22_stocksiphon_rss_ecr.repository_url}:latest"
   package_type  = "Image"
-  timeout       = 300
+  timeout       = 600
 }
 
 resource "aws_lambda_function" "c22_stocksiphon_alpaca_lambda" {
@@ -11,7 +11,7 @@ resource "aws_lambda_function" "c22_stocksiphon_alpaca_lambda" {
   role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
   image_uri     = "${aws_ecr_repository.c22_stocksiphon_alpaca_ecr.repository_url}:latest"
   package_type  = "Image"
-  timeout       = 300
+  timeout       = 600
 }
 
 resource "aws_lambda_function" "c22_stocksiphon_reddit_lambda" {
@@ -19,7 +19,7 @@ resource "aws_lambda_function" "c22_stocksiphon_reddit_lambda" {
   role          = aws_iam_role.c22_stocksiphon_lambda_role.arn
   image_uri     = "${aws_ecr_repository.c22_stocksiphon_reddit_ecr.repository_url}:latest"
   package_type  = "Image"
-  timeout       = 300
+  timeout       = 600
 }
 
 resource "aws_iam_role" "c22_stocksiphon_lambda_role" {

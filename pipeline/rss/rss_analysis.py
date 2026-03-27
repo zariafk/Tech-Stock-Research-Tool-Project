@@ -1,6 +1,7 @@
 """OpenAI-powered analysis of RSS articles for ticker relevance and sentiment."""
 
 from openai import OpenAI, RateLimitError, APIError
+from concurrent.futures import ThreadPoolExecutor
 import os
 import dotenv
 import time
@@ -9,8 +10,8 @@ import json
 import hashlib
 import psycopg2
 from logger import logger
-from pipeline.rss.fallback_stock import tech_universe
-from pipeline.rss.rss_extract_live import RSS_FEEDS, extract_live
+from fallback_stock import tech_universe
+from rss_extract_live import RSS_FEEDS, extract_live
 from rss_load import get_connection, get_tickers_from_db
 
 dotenv.load_dotenv()
@@ -62,6 +63,7 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
+MAX_WORKERS = 3  # Concurrent OpenAI threads to respect rate limits
 
 CLIENT = OpenAI(
     api_key=os.environ.get(
@@ -185,8 +187,23 @@ def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -
                 return []
 
 
+def _analyze_article(article_with_tickers: tuple) -> list[dict]:
+    """Analyze single article with OpenAI and enrich results."""
+    article, potential_tickers = article_with_tickers
+    # Make OpenAI call with retry logic
+    analysis = get_ticker_analysis(article, potential_tickers)
+
+    result = []
+    for analysis_result in analysis:
+        copy = article.copy()
+        copy.update(analysis_result)
+        result.append(copy)
+
+    return result
+
+
 def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
-    """Filter articles using keyword pre-filter then OpenAI."""
+    """Filter articles using keyword pre-filter then parallel OpenAI analysis."""
     filtered = []
 
     logger.info("Starting filter_by_ticker with %d articles", len(articles))
@@ -197,28 +214,26 @@ def filter_by_ticker(articles: list[dict], tickers: list[str]) -> list[dict]:
     logger.info("Found %d/%d articles already in RDS — skipping OpenAI for those.",
                 len(existing_urls), len(candidate_urls))
 
+    # Step 1: Pre-filter with keyword matching
+    articles_to_analyze = []
     for article in articles:
         if article['url'] in existing_urls:
             logger.debug("Skipping existing article: %s", article['url'])
             continue
 
-        # Step 1: Fast keyword match (skip if no tickers found)
         potential_tickers = extract_keywords(article, tickers)
+        if potential_tickers:
+            articles_to_analyze.append((article, potential_tickers))
 
-        if not potential_tickers:
-            continue
+    # Step 2: Parallel OpenAI analysis using ThreadPoolExecutor
+    logger.info("Analyzing %d articles with OpenAI in parallel",
+                len(articles_to_analyze))
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        results = list(executor.map(_analyze_article, articles_to_analyze))
 
-        # Step 2: Call OpenAI for relevance/sentiment (with retry backoff)
-        analysis = get_ticker_analysis(article, potential_tickers)
-
-        # time.sleep(0.2)  # Rate limit protection between calls
-        logger.info("OpenAI analysis result: %s", analysis)
-
-        # Step 3: Merge OpenAI results with article, one row per ticker hit
-        for result in analysis:
-            copy = article.copy()
-            copy.update(result)  # Add score, sentiment, analysis
-            filtered.append(copy)
+    # Step 3: Flatten results from concurrent execution
+    for batch in results:
+        filtered.extend(batch)
 
     return filtered
 

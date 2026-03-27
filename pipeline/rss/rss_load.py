@@ -24,18 +24,8 @@ def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
 
 
 def get_connection():
-    """Connect to RDS PostgreSQL. Uses env vars for local dev, Secrets Manager for prod."""
-    if os.environ.get("DB_HOST"):
-        return psycopg2.connect(
-            host=os.environ["DB_HOST"],
-            port=os.environ.get("DB_PORT", 5432),
-            dbname=os.environ["DB_NAME"],
-            user=os.environ["DB_USER"],
-            password=os.environ["DB_PASSWORD"],
-        )
-
-    # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    """Connect to RDS PostgreSQL. Uses Secrets Manager for prod."""
+    secret = get_secret("c22-trade-research-tool-secrets")
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),

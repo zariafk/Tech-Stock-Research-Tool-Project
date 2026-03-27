@@ -15,6 +15,8 @@ def build_document_id(doc: dict) -> str:
     source = metadata.get("source", "unknown")
 
     if source == "alpaca":
+        if metadata.get("doc_type") == "live_bar":
+            return f"alpaca_live_{metadata['ticker']}_{metadata['timestamp']}"
         return f"alpaca_{metadata['ticker']}_{metadata['date']}"
 
     if source == "rss":
@@ -33,7 +35,8 @@ def build_document_id(doc: dict) -> str:
 
 def store_documents(documents: list, embeddings: list) -> None:
     """Store documents and their corresponding embeddings in the ChromaDB collection."""
-    ids = [build_document_id(doc) for doc in documents]
+    ids = [doc["id"] if "id" in doc else build_document_id(
+        doc) for doc in documents]
     texts = [doc["text"] for doc in documents]
     metadatas = [doc["metadata"] for doc in documents]
 

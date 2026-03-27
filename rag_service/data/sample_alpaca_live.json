@@ -1,0 +1,11 @@
+[
+    {
+        "ticker": "NVDA",
+        "latest_time": "2026-03-27T13:20:00Z",
+        "open": 900,
+        "high": 920,
+        "low": 895,
+        "close": 915,
+        "volume": 1200000
+    }
+]

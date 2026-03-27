@@ -1,74 +1,140 @@
-from app.ingest import normalise_alpaca_data
+import json
+import os
+from app.ingest import convert_to_documents
+
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
-def test_convert_to_documents(sample_nvda_data):
-    """Test the normalise_alpaca_data function with sample data."""
-
-    docs = normalise_alpaca_data(sample_nvda_data)
-
-    assert len(docs) == 1
-    assert docs[0]["metadata"]["ticker"] == "NVDA"
-    assert "close 124.7" in docs[0]["text"]
+def load_json(filename):
+    path = os.path.join(BASE_DIR, "data", filename)
+    with open(path) as f:
+        return json.load(f)
 
 
-def test_convert_to_documents_multiple_records(sample_apple_data, sample_nvda_data, sample_msft_data):
-    """Test the normalise_alpaca_data function with multiple records."""
+class TestRssIngest:
+    def test_rss(self):
+        """Test that RSS data is correctly converted to documents."""
+        data = load_json("sample_rss.json")
+        docs = convert_to_documents(data, "rss")
+        assert len(docs) == 1
+        assert "text" in docs[0]
+        assert "metadata" in docs[0]
 
-    combined_data = sample_apple_data + sample_nvda_data + sample_msft_data
-    docs = normalise_alpaca_data(combined_data)
+    def test_rss_minimal(self):
+        """Test that minimal RSS data is still converted to a document."""
+        data = [
+            {
+                "text": "Test text",
+                "metadata": {"ticker": "AAPL"}
+            }
+        ]
 
-    assert len(docs) == 3
-    tickers = {doc["metadata"]["ticker"] for doc in docs}
-    assert tickers == {"AAPL", "NVDA", "MSFT"}
-    assert any("close 154.0" in doc["text"]
-               for doc in docs if doc["metadata"]["ticker"] == "AAPL")
-    assert any("close 124.7" in doc["text"]
-               for doc in docs if doc["metadata"]["ticker"] == "NVDA")
-    assert any("close 254.0" in doc["text"]
-               for doc in docs if doc["metadata"]["ticker"] == "MSFT")
-
-
-def test_normalise_alpaca_data_empty_data():
-    """Test the normalise_alpaca_data function with empty data."""
-
-    docs = normalise_alpaca_data([])
-
-    assert len(docs) == 0
+        docs = convert_to_documents(data, "rss")
+        assert len(docs) == 1
 
 
-def test_normalise_alpaca_data_missing_fields(sample_incomplete_data):
-    """Test the normalise_alpaca_data function with incomplete data."""
+class TestRedditIngest:
+    def test_reddit(self):
+        """Test that Reddit data is correctly converted to documents."""
+        data = load_json("sample_reddit.json")
+        docs = convert_to_documents(data, "reddit")
+        assert len(docs) == 2  # 2 tickers
+        for doc in docs:
+            assert "ticker" in doc["metadata"]
 
-    docs = normalise_alpaca_data(sample_incomplete_data)
+    def test_reddit_edge_cases(self):
+        """Test that Reddit data with missing fields is handled gracefully."""
+        data = [
+            {
+                "post_id": "test1",
+                "title": "",
+                "contents": "Only body text",
+                "created_at": "2026-03-27T12:00:00Z",
+                "tickers": [
+                    {"ticker": "AAPL"},
+                    {"ticker": "MSFT", "analysis": "Strong trend"}
+                ]
+            }
+        ]
 
-    assert len(docs) == 1
-    assert docs[0]["metadata"]["ticker"] == "AAPL"
-    assert "open 150.0" in docs[0]["text"]
-    assert "high" not in docs[0]["text"]
-    assert "low" not in docs[0]["text"]
-    assert "close" not in docs[0]["text"]
-    assert "volume" not in docs[0]["text"]
+        docs = convert_to_documents(data, "reddit")
+        assert len(docs) == 2
+
+    def test_reddit_missing_ticker(self):
+        """Test that Reddit data with missing ticker is handled gracefully."""
+        data = [
+            {
+                "post_id": "test2",
+                "title": "Test",
+                "contents": "Test body",
+                "created_at": "2026-03-27T12:00:00Z",
+                "tickers": [{}]
+            }
+        ]
+
+        docs = convert_to_documents(data, "reddit")
+        assert len(docs) == 0
 
 
-def test_normalise_alpaca_data_no_required_metrics(sample_no_metrics_data):
-    """Test the normalise_alpaca_data function with data that has no required metrics."""
+class TestAlpacaIngest:
+    def test_alpaca_live(self):
+        """Test that Alpaca live bar data is correctly converted to documents."""
+        data = load_json("sample_alpaca_live.json")
+        docs = convert_to_documents(data, "alpaca")
+        assert len(docs) == 1
+        assert docs[0]["metadata"]["doc_type"] == "live_bar"
 
-    docs = normalise_alpaca_data(sample_no_metrics_data)
+    def test_alpaca_historical(self):
+        """Test that Alpaca historical data is correctly converted to documents."""
+        data = load_json("sample_alpaca_history.json")
+        docs = convert_to_documents(data, "alpaca")
+        assert len(docs) == 1
+        assert docs[0]["metadata"]["doc_type"] == "daily_summary"
 
-    assert len(docs) == 0
+    def test_alpaca_partial_data(self):
+        """Test that Alpaca data with missing fields is still converted to a document."""
+        data = [
+            {
+                "ticker": "NVDA",
+                "latest_time": "2026-03-27T13:20:00Z",
+                "close": 900
+            }
+        ]
+
+        docs = convert_to_documents(data, "alpaca")
+        assert len(docs) == 1
+
+    def test_alpaca_invalid(self):
+        """Test that Alpaca data with invalid fields is not converted to a document."""
+        data = [
+            {
+                "ticker": None
+            }
+        ]
+
+        docs = convert_to_documents(data, "alpaca")
+        assert len(docs) == 0
 
 
-def test_normalise_alpaca_data_missing_ticker(sample_missing_ticker_data):
-    """Test the normalise_alpaca_data function with data missing the ticker field."""
+class TestMixedIngest:
+    def test_mixed_batch(self):
+        """Test that a mixed batch of data from all sources is correctly converted to documents."""
+        rss = [{"text": "Test", "metadata": {"ticker": "AAPL"}}]
 
-    docs = normalise_alpaca_data(sample_missing_ticker_data)
+        reddit = [{
+            "post_id": "x",
+            "title": "Test",
+            "contents": "Body",
+            "created_at": "2026-03-27T12:00:00Z",
+            "tickers": [{"ticker": "MSFT"}]
+        }]
 
-    assert len(docs) == 0
+        alpaca = [{
+            "ticker": "NVDA",
+            "latest_time": "2026-03-27T13:20:00Z",
+            "close": 900
+        }]
 
-
-def test_normalise_alpaca_data_missing_timestamp(sample_missing_timestamp_data):
-    """Test the normalise_alpaca_data function with data missing the timestamp field."""
-
-    docs = normalise_alpaca_data(sample_missing_timestamp_data)
-
-    assert len(docs) == 0
+        assert len(convert_to_documents(rss, "rss")) == 1
+        assert len(convert_to_documents(reddit, "reddit")) == 1
+        assert len(convert_to_documents(alpaca, "alpaca")) == 1

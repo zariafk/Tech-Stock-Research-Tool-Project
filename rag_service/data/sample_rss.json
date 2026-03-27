@@ -1,26 +1,14 @@
 [
     {
-        "id": "1",
-        "text": "Nvidia stock surged after earnings as strong AI demand boosted results.",
-        "metadata": {
-            "ticker": "NVDA",
-            "source": "rss",
-            "published_date": "2026-03-26T10:00:00Z",
-            "link": "https://example.com/nvda-news",
-            "relevance_score": 0.95,
-            "sentiment": "positive"
-        }
-    },
-    {
-        "id": "2",
-        "text": "Apple may face softer iPhone demand this quarter according to recent reports.",
+        "id": "test_rss_1",
+        "text": "Title: Apple launches new AI chip. Summary: Apple introduces a new chip for AI workloads. Analysis: This could strengthen Apple's position in AI hardware.",
         "metadata": {
             "ticker": "AAPL",
-            "source": "rss",
-            "published_date": "2026-03-26T11:00:00Z",
-            "link": "https://example.com/aapl-news",
-            "relevance_score": 0.72,
-            "sentiment": "negative"
+            "source": "techcrunch",
+            "published_date": "2026-03-27T10:00:00Z",
+            "link": "https://example.com/apple-ai-chip",
+            "relevance_score": 9,
+            "sentiment": 0.7
         }
     }
 ]

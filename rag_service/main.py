@@ -9,12 +9,13 @@ from app.pipeline import ingest_data, answer_query
 
 def main():
     """to test RAG system locally"""
-    ingest_data(source="alpaca", data_path="data/sample_alpaca.json")
+    ingest_data(source="alpaca", data_path="data/sample_alpaca_live.json")
+    ingest_data(source="alpaca", data_path="data/sample_alpaca_history.json")
     ingest_data(source="rss", data_path="data/sample_rss.json")
     ingest_data(source="reddit", data_path="data/sample_reddit.json")
 
-    query = "What is happening with NVDA?"
-    answer = answer_query(query, sources=["reddit"])
+    query = "Summarise if it is best to buy NVDA?"
+    answer = answer_query(query, sources=["reddit", "rss", "alpaca"])
     print(answer)
 
 

@@ -1,0 +1,11 @@
+[
+    {
+        "ticker": "NVDA",
+        "bar_date": "2026-03-26",
+        "open": 880,
+        "high": 910,
+        "low": 870,
+        "close": 905,
+        "volume": 5000000
+    }
+]

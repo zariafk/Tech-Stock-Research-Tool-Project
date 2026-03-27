@@ -5,7 +5,13 @@ using ChromaDB to store and manage document embeddings and metadata.
 
 import chromadb
 
-client = chromadb.PersistentClient(path="chroma_db")
+import chromadb
+
+client = chromadb.HttpClient(
+    host=os.getenv("CHROMA_HOST"),
+    port=8000
+)
+
 collection = client.get_or_create_collection(name="stock_data")
 
 

@@ -28,7 +28,7 @@ def convert_to_documents(data: list, source: str) -> list:
     documents = []
 
     for record in data:
-        # if the record is already RAG-ready - only includes RSS for now
+        # if the record is already RAG-ready - only includes RSS
         if "text" in record and "metadata" in record:
             documents.append(record)
             continue

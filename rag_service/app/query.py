@@ -3,12 +3,22 @@ This module contains functions for building the context from retrieved documents
 and generating answers to user queries using the OpenAI API.
 """
 
+import json
 from openai import OpenAI
-from dotenv import load_dotenv
 import os
+import boto3
 
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
+
+
+secret_name = os.getenv("SECRET_NAME")
+secret_values = get_secret(secret_name)
+
+client = OpenAI(api_key=secret_values["OPENAI_API_KEY"])
 
 
 def build_context(retrieved_docs: list) -> str:

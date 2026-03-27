@@ -2,3 +2,8 @@
 - run ./build_ingest.sh
 - run chmod +x build_query.sh to make it executable
 - run ./build_query.sh
+- go to terraform/rag
+- terraform init
+- terraform plan
+- terraform apply
+- yes

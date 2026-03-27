@@ -10,7 +10,7 @@ from openai import OpenAI
 from extract import extract_main
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
-from analyse import analyse_posts
+from analysis import analyse_posts
 from load import get_secret, get_connection, get_existing_ids, load_main
 
 dotenv.load_dotenv()

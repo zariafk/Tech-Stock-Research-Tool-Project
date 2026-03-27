@@ -24,6 +24,20 @@ def ingest_data(source: str, data_path: str = None, data: list = None) -> None:
     store_documents(docs, embeddings)
 
 
+def format_sources(retrieved_docs: list) -> str:
+    sources = []
+
+    for doc in retrieved_docs:
+        meta = doc["metadata"]
+        source = meta.get("source", "unknown")
+        ticker = meta.get("ticker", "")
+        date = meta.get("date") or meta.get("timestamp", "")
+
+        sources.append(f"- {source.upper()} ({ticker}, {date})")
+
+    return "\n".join(sorted(set(sources)))
+
+
 def get_task_type(query: str) -> str:
     q = query.lower().strip()
 
@@ -50,7 +64,11 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None) -> s
             user_query, ticker=ticker, source=source, n_results=n_results
         )
         docs = results.get("documents", [[]])[0]
-        retrieved_docs.extend(docs)
+
+        metadatas = results.get("metadatas", [[]])[0]
+
+        for doc, meta in zip(docs, metadatas):
+            retrieved_docs.append({"text": doc, "metadata": meta})
 
     if not retrieved_docs:
         return "I do not have enough information to answer that question."
@@ -60,4 +78,6 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None) -> s
     task_type = get_task_type(user_query)
 
     answer = generate_answer(user_query, context, task_type)
-    return answer
+
+    sources_text = format_sources(retrieved_docs)
+    return f"{answer}\n\nSources:\n{sources_text}"

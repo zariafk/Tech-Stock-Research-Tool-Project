@@ -75,10 +75,24 @@ def insert_dataframe(
 def join_tables_to_json(
     fact_posts: pd.DataFrame,
     dim_subreddits: pd.DataFrame,
+    fact_post_tickers: pd.DataFrame,
 ) -> list[dict]:
-    """Joins fact_posts and dim_subreddits and returns the result as a list of dicts."""
+    """Joins all three tables, nesting ticker analysis per post."""
     joined = fact_posts.merge(dim_subreddits, on="subreddit_id", how="left")
-    return joined.to_dict(orient="records")
+    records = joined.to_dict(orient="records")
+
+    # Group ticker results by post_id for fast lookup
+    ticker_cols = ["ticker", "relevance_score", "sentiment", "analysis"]
+    ticker_groups = (
+        fact_post_tickers.groupby("post_id")[ticker_cols]
+        .apply(lambda g: g.to_dict(orient="records"))
+        .to_dict()
+    )
+
+    for record in records:
+        record["tickers"] = ticker_groups.get(record["id"], [])
+
+    return records
 
 
 def load_main(

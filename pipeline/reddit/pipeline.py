@@ -11,14 +11,14 @@ from extract import extract_main
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
 from analysis import analyse_posts
-from load import get_secret, get_connection, get_existing_ids, load_main
+from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json
 
 dotenv.load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RDS_SECRET_NAME = "reddit-pipeline/rds-credentials"
+RDS_SECRET_NAME = "c22-trade-research-tool-secrets"
 
 SUBREDDITS = [
     "trading", "stocks", "investing", "stockmarket",
@@ -74,6 +74,11 @@ def run_pipeline() -> None:
 
         logger.info("Starting load")
         print(fact_post_tickers)
+
+        result = join_tables_to_json(
+            fact_posts, dim_subreddits, fact_post_tickers)
+
+        print(result)
         # load_main(
         #     {
         #         "fact_posts": fact_posts,

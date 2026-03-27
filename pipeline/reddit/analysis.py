@@ -82,8 +82,6 @@ def parse_relevance_data(response: str) -> list[dict]:
                 })
         return results
     except json.JSONDecodeError as e:
-        print(item.get('r', 0))
-        print(f"the type is: {item.get('r', 0)}")
         logger.error(
             f"Failed to parse JSON from OpenAI response: {e}. Raw: {response}")
         return []

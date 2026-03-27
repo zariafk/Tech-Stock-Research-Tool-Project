@@ -52,6 +52,8 @@ def insert_dataframe(
     conn: psycopg2.extensions.connection,
     df: pd.DataFrame,
     table: str,
+    *,
+    conflict_column: str | None = None,
 ) -> None:
     """Inserts a DataFrame into a PostgreSQL table using batch execute."""
     if df.empty:
@@ -62,6 +64,11 @@ def insert_dataframe(
     placeholders = ", ".join(["%s"] * len(columns))
     column_names = ", ".join(columns)
     query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # noqa: S608
+
+    if conflict_column:
+        update_cols = [c for c in columns if c != conflict_column]
+        update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+        query += f" ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set}"
 
     rows = [tuple(row) for row in df.itertuples(index=False, name=None)]
 
@@ -111,13 +118,12 @@ def get_stock_id_map(
 def build_story_stock_df(
     fact_post_tickers: pd.DataFrame,
     stock_id_map: dict[str, int],
-    story_type: str = "reddit",
 ) -> pd.DataFrame:
     """Maps fact_post_tickers into the story_stock schema."""
     if fact_post_tickers.empty:
         return pd.DataFrame(columns=[
             "story_id", "stock_id", "sentiment_score",
-            "relevance_score", "analysis", "story_type",
+            "relevance_score", "analysis",
         ])
 
     df = fact_post_tickers.copy()
@@ -137,11 +143,9 @@ def build_story_stock_df(
         "sentiment": "sentiment_score",
     })
 
-    df["story_type"] = story_type
-
     return df[[
         "story_id", "stock_id", "sentiment_score",
-        "relevance_score", "analysis", "story_type",
+        "relevance_score", "analysis",
     ]]
 
 
@@ -149,13 +153,20 @@ def load_main(
     tables: dict[str, pd.DataFrame],
     *,
     conn: psycopg2.extensions.connection,
+    conflict_columns: dict[str, str] | None = None,
 ) -> None:
     """Loads all tables into PostgreSQL."""
+    if conflict_columns is None:
+        conflict_columns = {}
+
     for table_name, df in tables.items():
         if df.empty:
             logger.info("No new rows for %s, skipping", table_name)
             continue
 
-        insert_dataframe(conn, df, table_name)
+        insert_dataframe(
+            conn, df, table_name,
+            conflict_column=conflict_columns.get(table_name),
+        )
 
     logger.info("Load complete — %d tables processed", len(tables))

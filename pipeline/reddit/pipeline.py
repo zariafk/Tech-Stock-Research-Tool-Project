@@ -1,10 +1,9 @@
 """Main pipeline orchestrator."""
 
-from top_100_tech_companies import tech_universe
 import logging
 import os
+import json
 
-import dotenv
 from openai import OpenAI
 
 from extract import extract_main
@@ -13,12 +12,11 @@ from transform import transform_main
 from analysis import analyse_posts
 from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json, get_stock_id_map, build_story_stock_df
 
-dotenv.load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RDS_SECRET_NAME = "c22-trade-research-tool-secrets"
+SECRET_NAME = "c22-trade-research-tool-secrets"
 
 SUBREDDITS = [
     "trading", "stocks", "investing", "stockmarket",
@@ -46,15 +44,20 @@ DIM_SUBREDDITS_COLUMNS = [
 
 REQUIRED_COLUMNS = ["id", "title", "subreddit_id", "author"]
 
-# Import your existing ticker universe
-TICKER_COMPANIES = tech_universe
+
+def get_ticker_companies(conn) -> dict[str, str]:
+    """Fetches ticker -> stock_name mapping from the stock table."""
+    query = "SELECT ticker, stock_name FROM stock"
+    with conn.cursor() as cur:
+        cur.execute(query)
+        return {ticker: name for ticker, name in cur.fetchall()}
 
 
 def run_pipeline() -> None:
     """Runs the full ETL pipeline."""
-    secret = get_secret(RDS_SECRET_NAME)
+    secret = get_secret(SECRET_NAME)
     conn = get_connection(secret)
-    openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    openai_client = OpenAI(api_key=secret["OPENAI_API_KEY"])
 
     try:
         logger.info("Starting extract")
@@ -74,10 +77,14 @@ def run_pipeline() -> None:
 
         fact_posts = fact_posts.rename(columns=FACT_POSTS_RENAME)
 
+        ticker_companies = get_ticker_companies(conn)
+        logger.info("Loaded %d tickers from stock table",
+                    len(ticker_companies))
+
         logger.info("Starting analysis")
         fact_post_tickers = analyse_posts(
             fact_posts,
-            ticker_companies=TICKER_COMPANIES,
+            ticker_companies=ticker_companies,
             client=openai_client,
         )
 
@@ -98,11 +105,14 @@ def run_pipeline() -> None:
 
         load_main(
             {
-                "fact_posts": fact_posts,
                 "subreddit": dim_subreddits,
-                "story_stock": story_stock,
+                "reddit_post": fact_posts,
+                "reddit_analysis": story_stock,
             },
             conn=conn,
+            conflict_columns={
+                "subreddit": "subreddit_id",
+            },
         )
         logger.info("Pipeline complete")
 

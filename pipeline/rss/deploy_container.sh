@@ -3,7 +3,7 @@
 set -e
 # Load from environment variables (set in CI/CD or export before running)
 AWS_ACCOUNT_ID="129033205317"
-REGION="eu-west-3"
+REGION="eu-west-2"
 REPO_NAME="c22-stocksiphon-rss-ecr"
 TAG="latest"
 

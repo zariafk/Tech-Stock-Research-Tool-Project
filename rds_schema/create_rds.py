@@ -53,65 +53,6 @@ def get_db_connection():
 
 
 def execute_schema(connection, sql_content: str) -> None:
-    """Executes the provided SQL commands to create the database schema."""
-    cursor = connection.cursor()
-
-    try:
-        # Split on semicolons to execute each statement individually
-        statements = [
-            stmt.strip()
-            for stmt in sql_content.split(";")
-            if stmt.strip()  # Filter out empty strings
-        ]
-
-        for i, statement in enumerate(statements, start=1):
-            # Log the first 50 chars of the statement
-            logger.info(f"  Running SQL statement {i}: {statement[:50]}...")
-            cursor.execute(statement)
-
-        # Commit all changes to the database
-        connection.commit()
-        logger.info("\nSchema committed successfully.")
-
-    except psycopg2.DatabaseError as db_err:
-        # Roll back any partial changes if an error occurs
-        connection.rollback()
-        logger.error("\nDatabase error encountered. Transaction rolled back.")
-        raise db_err
-
-    finally:
-        cursor.close()
-
-# def execute_schema(connection, sql_content: str) -> None:
-    # """Execute SQL schema from file, handling comments properly."""
-    # try:
-    #     with connection.cursor() as cursor:
-    #         # Remove SQL comments (-- style)
-    #         lines = []
-    #         for line in sql_content.split('\n'):
-    #             # Remove inline comments
-    #             if '--' in line:
-    #                 line = line[:line.index('--')]
-    #             lines.append(line)
-
-    #         cleaned_sql = '\n'.join(lines)
-
-    #         # Split by semicolon and filter out empty statements
-    #         statements = [stmt.strip() for stmt in cleaned_sql.split(';') if stmt.strip()]
-
-    #         for statement in statements:
-    #             logger.info("Executing: %s...", statement[:60])
-    #             cursor.execute(statement)
-
-    #         connection.commit()
-    #         logger.info("Schema created successfully.")
-    # except psycopg2.Error as db_err:
-    #     logger.error("Database error encountered. Transaction rolled back.")
-    #     connection.rollback()
-    #     raise db_err
-
-
-def execute_schema(connection, sql_content: str) -> None:
     """Execute SQL schema from file, handling comments properly."""
     try:
         with connection.cursor() as cursor:

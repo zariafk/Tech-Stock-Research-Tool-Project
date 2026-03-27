@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS rss_article (
     story_id        SERIAL PRIMARY KEY,
     title           VARCHAR(500)  NOT NULL,
     url             VARCHAR(1000) NOT NULL UNIQUE,
-    summary         VARCHAR(5000),
-    published_date  TIMESTAMP,
-    source          VARCHAR(500)
+    summary         VARCHAR(5000) NOT NULL,
+    published_date  TIMESTAMP NOT NULL,
+    source          VARCHAR(500) NOT NULL
 );
 
 -- Reddit posts

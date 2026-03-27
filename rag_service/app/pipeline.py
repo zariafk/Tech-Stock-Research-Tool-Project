@@ -52,7 +52,7 @@ def get_task_type(query: str) -> str:
     return "chat"
 
 
-def answer_query(user_query: str, ticker: str = None, sources: list = None) -> str:
+def answer_query(user_query: str, ticker: str = None, sources: list = None, top_k: int = 5) -> str:
     """Answer a user query using the RAG pipeline."""
     if sources is None:
         sources = ["alpaca", "rss", "reddit"]
@@ -60,10 +60,10 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None) -> s
     retrieved_docs = []
 
     for source in sources:
-        if "price" in user_query.lower() or "close" in user_query.lower():
-            n_results = 2 if source == "alpaca" else 1
+        if source == "alpaca":
+            n_results = min(top_k, 2)
         else:
-            n_results = 1 if source == "alpaca" else 3
+            n_results = top_k
 
         results = retrieve_documents(
             user_query, ticker=ticker, source=source, n_results=n_results

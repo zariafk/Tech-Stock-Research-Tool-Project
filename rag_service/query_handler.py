@@ -26,7 +26,8 @@ def lambda_handler(event, context) -> dict:
         answer = answer_query(
             user_query=question,
             ticker=ticker,
-            sources=sources
+            sources=sources,
+            top_k=top_k or 5
         )
 
         return {

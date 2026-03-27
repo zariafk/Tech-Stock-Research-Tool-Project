@@ -81,28 +81,30 @@ def run_pipeline() -> None:
             client=openai_client,
         )
 
+        # Only keep posts that have at least one relevant ticker
+        matched_post_ids = set(fact_post_tickers["post_id"])
+        fact_posts = fact_posts[fact_posts["post_id"].isin(matched_post_ids)]
+        logger.info("Kept %d posts with relevant tickers", len(fact_posts))
+
         logger.info("Starting load")
-        print(fact_post_tickers)
 
         result = join_tables_to_json(
             fact_posts, dim_subreddits, fact_post_tickers)
 
-        print(result)
-
         logger.info("Starting load")
 
-        # stock_id_map = get_stock_id_map(conn)
-        # story_stock = build_story_stock_df(fact_post_tickers, stock_id_map)
+        stock_id_map = get_stock_id_map(conn)
+        story_stock = build_story_stock_df(fact_post_tickers, stock_id_map)
 
-        # load_main(
-        #     {
-        #         "fact_posts": fact_posts,
-        #         "subreddit": dim_subreddits,
-        #         "story_stock": story_stock,
-        #     },
-        #     conn=conn,
-        # )
-        # logger.info("Pipeline complete")
+        load_main(
+            {
+                "fact_posts": fact_posts,
+                "subreddit": dim_subreddits,
+                "story_stock": story_stock,
+            },
+            conn=conn,
+        )
+        logger.info("Pipeline complete")
 
     finally:
         conn.close()

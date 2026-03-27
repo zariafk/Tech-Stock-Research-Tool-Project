@@ -2,15 +2,17 @@
 
 import json
 import time
-import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, APIError
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+MAX_WORKERS = 3
 
 
 def format_ticker_prompt(post: dict, tickers: list[str]) -> str:
@@ -36,7 +38,7 @@ def format_ticker_prompt(post: dict, tickers: list[str]) -> str:
     - -1.0: Catastrophic negative news.
 
     Output Format (JSON list):
-    [{{"t": "TICKER", "r": [score], "s": [score], "why": "one sentence justification"}}]
+    [{{"t": "TICKER", "r": score, "s": score, "why": "one sentence justification"}}]
     """
 
 
@@ -44,7 +46,7 @@ def extract_keywords(
     post: dict,
     ticker_companies: dict[str, str],
 ) -> list[str]:
-    """Finds tickers mentioned via keyword match in title and selftext."""
+    """Finds tickers mentioned via keyword match in title and contents."""
     text = f"{post['title']} {post['contents']}".lower()
     return [
         ticker for ticker, company in ticker_companies.items()
@@ -53,32 +55,41 @@ def extract_keywords(
 
 
 def parse_relevance_data(response: str) -> list[dict]:
-    """Parses OpenAI JSON response into a list of ticker results."""
+    """Parse OpenAI JSON response into a list of ticker analytics."""
     try:
+        # Strip markdown markers if present
         cleaned = (
             response.strip()
-            .replace("```json", "")
-            .replace("```", "")
+            .replace('```json', '')
+            .replace('```', '')
             .strip()
         )
         data = json.loads(cleaned)
 
+        # Ensure it's a list
         if isinstance(data, dict):
             data = [data]
 
-        return [
-            {
-                "ticker": item.get("t"),
-                "relevance_score": item.get("r"),
-                "sentiment": item.get("s"),
-                "analysis": item.get("why"),
-            }
-            for item in data
-            if item.get("r", 0) >= 7
-        ]
-
-    except (json.JSONDecodeError, TypeError) as exc:
-        logger.error("Failed to parse OpenAI response: %s", exc)
+        results = []
+        for item in data:
+            # Filter for r >= 7
+            if item.get('r', 0) >= 7:
+                results.append({
+                    "ticker": item.get('t'),
+                    "relevance_score": item.get('r'),
+                    "sentiment": item.get('s'),
+                    "analysis": item.get('why')
+                })
+        return results
+    except json.JSONDecodeError as e:
+        print(item.get('r', 0))
+        print(f"the type is: {item.get('r', 0)}")
+        logger.error(
+            f"Failed to parse JSON from OpenAI response: {e}. Raw: {response}")
+        return []
+    except (KeyError, TypeError, AttributeError) as e:
+        logger.error(
+            f"Unexpected structure in OpenAI response: {e}. Raw: {response}")
         return []
 
 
@@ -101,8 +112,8 @@ def get_ticker_analysis(
             )
             return parse_relevance_data(response.choices[0].message.content)
 
-        except Exception as exc:
-            if "rate_limit" in str(exc).lower() and attempt < max_retries - 1:
+        except RateLimitError as exc:
+            if attempt < max_retries - 1:
                 backoff = 2 ** attempt
                 logger.warning(
                     "Rate limited, retrying in %ds (attempt %d/%d)",
@@ -110,11 +121,39 @@ def get_ticker_analysis(
                 )
                 time.sleep(backoff)
             else:
-                logger.error("OpenAI error after %d attempts: %s",
-                             attempt + 1, exc)
+                logger.error(
+                    "Rate limit persisted after %d attempts: %s",
+                    max_retries, exc,
+                )
+                return []
+
+        except APIError as exc:
+            logger.error("OpenAI API error on attempt %d: %s",
+                         attempt + 1, exc)
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+            else:
                 return []
 
     return []
+
+
+def _analyse_single_post(args: tuple) -> list[dict]:
+    """Analyses a single post — designed to run inside a thread pool."""
+    post_dict, matched_tickers, client = args
+
+    results = get_ticker_analysis(client, post_dict, matched_tickers)
+
+    return [
+        {
+            "post_id": post_dict["post_id"],
+            "ticker": result["ticker"],
+            "relevance_score": result["relevance_score"],
+            "sentiment": result["sentiment"],
+            "analysis": result["analysis"],
+        }
+        for result in results
+    ]
 
 
 def analyse_posts(
@@ -122,36 +161,33 @@ def analyse_posts(
     *,
     ticker_companies: dict[str, str],
     client: OpenAI,
-    delay: float = 0.2,
+    max_workers: int = MAX_WORKERS,
 ) -> pd.DataFrame:
     """Analyses each post for ticker relevance and sentiment.
 
     Returns a DataFrame with one row per post-ticker pair, suitable
-    for loading into a fact_post_tickers table.
+    for loading into a story_stock table.
     """
-    rows = []
-
+    # Pre-filter: only send posts with keyword matches to OpenAI
+    posts_to_analyse = []
     for _, post in fact_posts.iterrows():
         post_dict = post.to_dict()
-
-        # Fast keyword pre-filter
         matched_tickers = extract_keywords(post_dict, ticker_companies)
-        if not matched_tickers:
-            continue
+        if matched_tickers:
+            posts_to_analyse.append((post_dict, matched_tickers, client))
 
-        # OpenAI analysis on matched tickers only
-        results = get_ticker_analysis(client, post_dict, matched_tickers)
+    logger.info(
+        "Analysing %d/%d posts with OpenAI (%d workers)",
+        len(posts_to_analyse), len(fact_posts), max_workers,
+    )
 
-        for result in results:
-            rows.append({
-                "post_id": post_dict["post_id"],
-                "ticker": result["ticker"],
-                "relevance_score": result["relevance_score"],
-                "sentiment": result["sentiment"],
-                "analysis": result["analysis"],
-            })
+    # Parallel OpenAI calls
+    rows = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        batches = list(executor.map(_analyse_single_post, posts_to_analyse))
 
-        time.sleep(delay)
+    for batch in batches:
+        rows.extend(batch)
 
     df = pd.DataFrame(rows)
 

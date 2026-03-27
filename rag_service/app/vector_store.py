@@ -1,22 +1,25 @@
-"""
-This module defines the vector store functionality for the RAG service, 
-using ChromaDB to store and manage document embeddings and metadata.
-"""
-
+import os
 import chromadb
 
-import chromadb
 
-client = chromadb.HttpClient(
-    host=os.getenv("CHROMA_HOST"),
-    port=8000
-)
+def get_chroma_client():
+    chroma_host = os.getenv("CHROMA_HOST")
 
-collection = client.get_or_create_collection(name="stock_data")
+    if not chroma_host:
+        raise ValueError("CHROMA_HOST is not set")
+
+    return chromadb.HttpClient(
+        host=chroma_host,
+        port=8000
+    )
+
+
+def get_collection():
+    client = get_chroma_client()
+    return client.get_or_create_collection(name="stock_data")
 
 
 def build_document_id(doc: dict) -> str:
-    """Build a unique document ID based on the document's metadata."""
     metadata = doc["metadata"]
     source = metadata.get("source", "unknown")
 
@@ -40,7 +43,8 @@ def build_document_id(doc: dict) -> str:
 
 
 def store_documents(documents: list, embeddings: list) -> None:
-    """Store documents and their corresponding embeddings in the ChromaDB collection."""
+    collection = get_collection()
+
     ids = [doc["id"] if "id" in doc else build_document_id(
         doc) for doc in documents]
     texts = [doc["text"] for doc in documents]

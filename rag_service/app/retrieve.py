@@ -5,7 +5,7 @@ the vector store based on a user query.
 
 import chromadb
 
-from app.vector_store import client
+from app.vector_store import get_collection
 from app.embed import get_embeddings
 
 

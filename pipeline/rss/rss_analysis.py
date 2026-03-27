@@ -1,9 +1,5 @@
 """OpenAI-powered analysis of RSS articles for ticker relevance and sentiment."""
 
-from seed_historical.rss_extract_historical import (
-    extract_historical
-)
-
 from openai import OpenAI, RateLimitError, APIError
 import os
 import dotenv
@@ -14,6 +10,7 @@ import hashlib
 import psycopg2
 from logger import logger
 from pipeline.rss.fallback_stock import tech_universe
+from pipeline.rss.rss_extract_live import RSS_FEEDS, extract_live
 from rss_load import get_connection, get_tickers_from_db
 
 dotenv.load_dotenv()
@@ -314,13 +311,7 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    df = analysis(extract_historical(TICKER_COMPANIES))
-
-    # Store locally for testing as requested
-    if not df.empty:
-        filename = f"test_results_{int(time.time())}.csv"
-        df.to_csv(filename, index=False)
-        logger.info(f"Results stored for testing in {filename}")
-        print(df.head())
-    else:
-        logger.warning("No data extracted to store.")
+    # For local testing, run analysis on live extraction
+    live = extract_live(RSS_FEEDS)
+    df = analysis(live)
+    print(df.head())

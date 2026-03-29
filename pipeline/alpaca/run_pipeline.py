@@ -3,15 +3,12 @@
 import pandas as pd
 import requests
 import psycopg2
-from dotenv import load_dotenv
 
 from alpaca_extract import extract_all_stock_data
 from alpaca_transform_cleaning import clean_all_stock_data
 from alpaca_load import load_all_to_rds
 from top_100_tech_companies import tech_universe
 from logger import logger
-
-load_dotenv()
 
 HISTORY_START_DATE = "2024-01-01"
 

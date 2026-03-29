@@ -1,20 +1,20 @@
 """Extract stock bar and snapshot data from Alpaca and return pandas DataFrames."""
 
-import os
 import json
 from datetime import datetime, timezone
 import pandas as pd
 import requests
-from dotenv import load_dotenv
 from top_100_tech_companies import tech_universe
+from config import get_secret
 from logger import logger
-load_dotenv()
 
 
 BARS_URL = "https://data.alpaca.markets/v2/stocks/bars"
 LATEST_BARS_URL = "https://data.alpaca.markets/v2/stocks/bars/latest"
-API_KEY = os.environ["ALPACA_API_KEY"]
-API_SECRET = os.environ["ALPACA_API_SECRET"]
+
+SECRETS = get_secret()
+API_KEY = SECRETS["ALPACA_API_KEY"]
+API_SECRET = SECRETS["ALPACA_API_SECRET"]
 
 
 def get_ingestion_time() -> str:

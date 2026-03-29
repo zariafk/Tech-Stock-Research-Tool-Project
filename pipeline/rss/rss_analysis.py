@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import hashlib
 import psycopg2
+import re
 from logger import logger
 from fallback_stock import tech_universe
 from rss_extract_live import RSS_FEEDS, extract_live
@@ -64,7 +65,7 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
-MAX_WORKERS = 10  # Concurrent OpenAI threads to respect rate limits
+MAX_WORKERS = 5  # Concurrent OpenAI threads to respect rate limits
 
 
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
@@ -103,12 +104,16 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     - 7: Indirect impact (Competitor/Sector news).
     - <7: Ignore.
 
-    Sentiment Rubric (Strictly use these values):
-    - 1.0: Transformational positive news.
-    - 0.5: Incremental/Standard positive news.
-    - 0.0: Neutral/Mixed news.
-    - -0.5: Incremental negative news.
-    - -1.0: Catastrophic negative news.
+    Sentiment Rubric (Score from -1.0 to 1.0 in 0.1 increments):
+    - +1.0: Transformational/Systemic positive (M&A, massive earnings beat).
+    - +0.7 to +0.9: Strong positive (Major product launch, key contract win).
+    - +0.3 to +0.6: Moderate positive (Positive analyst upgrade, steady growth).
+    - +0.1 to +0.2: Slight positive (Minor positive mention, general market lift).
+    - 0.0: Neutral, administrative, or purely factual noise.
+    - -0.1 to -0.2: Slight negative (Minor litigation, general market drag).
+    - -0.3 to -0.6: Moderate negative (Missed estimates, management turnover).
+    - -0.7 to -0.9: Strong negative (Regulatory investigation, product recall).
+    - -1.0: Catastrophic (Bankruptcy, fraud, massive data breach).
 
     Output Format (JSON list):
     [{{
@@ -129,7 +134,10 @@ def extract_keywords(entry: dict, tickers: list[str]) -> list[str]:
         if ticker not in TICKER_COMPANIES:
             continue
         company = TICKER_COMPANIES[ticker].lower()
-        if (ticker.lower() in text) or (company in text):
+        t_low = ticker.lower()
+        # if (ticker.lower() in text) or (company in text):
+        #     matches.append(ticker)
+        if re.search(rf'\b{t_low}\b', text) or (company in text):
             matches.append(ticker)
 
     return matches

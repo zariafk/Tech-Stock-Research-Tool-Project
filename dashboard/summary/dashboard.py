@@ -159,7 +159,18 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
         .add_params(selection)
     )
 
-    chart = (price_line + sentiment_dots).properties(height=350)
+    volume_bar = (
+        alt.Chart(history)
+        .mark_bar(color="#cbd5e0")
+        .encode(
+            x=alt.X("bar_date:T", axis=None),
+            y=alt.Y("volume:Q", title=None)
+        )
+        .properties(height=60)
+    )
+
+    main_chart = (price_line + sentiment_dots).properties(height=350)
+    chart = alt.vconcat(main_chart, volume_bar).resolve_scale(x='shared')
     return chart, social_merged
 
 
@@ -428,16 +439,21 @@ def dashboard():
 
             # Recent articles
             st.subheader("Recent Coverage")
-            for idx, row in news.head(5).iterrows():
-                sentiment_label, _ = classify_sentiment(row["sentiment_score"])
-                with st.expander(
-                    f"{sentiment_label} — {row['title'][:70]}... ({row['source']})"
-                ):
-                    st.caption(f"Published: {row['published_date']}")
-                    st.write(row["summary"][:300] + "...")
+            for _, row in news.head(5).iterrows():
+                s_score = row["sentiment_score"]
+                color = "green" if s_score > 0.2 else "red" if s_score < -0.2 else "gray"
+
+                with st.container(border=True):
+                    c1, c2 = st.columns([1, 4])
+                    c1.markdown(f"### :{color}[{s_score:+.1f}]")
+                    c1.caption(f"Rel: {row['relevance_score']:.2f}")
+
+                    c2.markdown(f"**{row['title']}**")
+                    c2.markdown(
+                        f"*{row['source']} • {row['published_date'].strftime('%d %b')}*"
+                    )
                     if row["analysis"]:
-                        st.markdown(
-                            f"**Analysis:** {row['analysis'][:200]}...")
+                        st.markdown(f"> **AI Take:** {row['analysis']}")
 
         st.divider()
 
@@ -489,6 +505,38 @@ def dashboard():
 
         st.divider()
 
+        # --- SIGNAL CONVERGENCE HEADER (PULSE CHECK) ---
+        st.subheader(f"Pulse Check: {ticker}")
+        st.caption("Institutional vs. Retail Sentiment Alignment")
+
+        # news = get_news_signals(stock_id)
+        # social = get_social_signals(stock_id)
+
+        news_avg = news["sentiment_score"].mean() if not news.empty else 0
+        social_avg = social["sentiment_score"].mean(
+        ) if not social.empty else 0
+        divergence = news_avg - social_avg
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Institutional (News)",
+                      f"{news_avg:+.2f}", delta_color="normal")
+        with col2:
+            st.metric("Retail (Reddit)",
+                      f"{social_avg:+.2f}", delta_color="normal")
+        with col3:
+            div_label = "Aligned" if abs(divergence) < 0.3 else "Diverging"
+            st.metric("Source Divergence", div_label,
+                      delta=f"{divergence:+.2f}", delta_color="normal")
+
+        if abs(divergence) > 0.5:
+            bullish_bearish_news = "bullish" if news_avg > 0 else "bearish"
+            bullish_bearish_social = "bullish" if social_avg > 0 else "bearish"
+            st.warning(
+                f"⚠️ **High Divergence:** Institutions are {bullish_bearish_news} while Retail is {bullish_bearish_social}. Potential volatility ahead.")
+
+        st.divider()
+
         # --- VISUAL ANALYTICS SECTION ---
         st.header("Visual Analytics")
         st.caption(
@@ -513,8 +561,11 @@ def dashboard():
             else:
                 convergence_chart, social_merged = convergence_result
                 event = st.altair_chart(
-                    convergence_chart, on_select="rerun", use_container_width=True, key="convergence_chart")
-                selected_points = event.selection.get("convergence_sel", [])
+                    convergence_chart, use_container_width=True, key="convergence_chart")
+                if isinstance(event, dict) and "convergence_sel" in event:
+                    selected_points = event.get("convergence_sel", [])
+                else:
+                    selected_points = []
                 if selected_points:
                     selected_ids = [p.get("post_id")
                                     for p in selected_points if p.get("post_id")]
@@ -528,7 +579,8 @@ def dashboard():
                         if post_row["contents"]:
                             st.write(post_row["contents"][:600])
                 else:
-                    st.caption("Click a sentiment dot above to read the post.")
+                    st.caption(
+                        "Hover over dots to see post details in tooltips.")
 
         with va_tab2:
             st.subheader("7-Day Weighted Sentiment Momentum")

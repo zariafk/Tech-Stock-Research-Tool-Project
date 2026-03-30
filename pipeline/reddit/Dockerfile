@@ -10,5 +10,6 @@ COPY analysis.py .
 COPY transform.py .
 COPY load.py .
 COPY pipeline.py .
+COPY rag_ingest_invoke.py .
 
 CMD ["pipeline.lambda_handler"]

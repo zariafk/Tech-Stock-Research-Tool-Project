@@ -30,31 +30,6 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — Time filter
-# ---------------------------------------------------------------------------
-st.sidebar.header("Time Range")
-
-TIME_OPTIONS = {
-    "1 Month":    30,
-    "3 Months":   90,
-    "6 Months":   180,
-    "1 Year":     365,
-    "From Start": None,
-}
-
-time_label = st.sidebar.radio("Select period", list(TIME_OPTIONS.keys()))
-time_days = TIME_OPTIONS[time_label]
-
-
-def apply_time_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
-    if time_days is None:
-        return df
-    cutoff = pd.Timestamp(date.today() - timedelta(days=time_days), tz="UTC")
-    df[date_col] = pd.to_datetime(df[date_col], utc=True)
-    return df[df[date_col].isna() | (df[date_col] >= cutoff)]
-
-
-# ---------------------------------------------------------------------------
 # Connection
 # ---------------------------------------------------------------------------
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
@@ -176,6 +151,32 @@ def fetch_reddit(_conn) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Sidebar — Time filter
+# ---------------------------------------------------------------------------
+st.sidebar.header("Time Range")
+
+TIME_OPTIONS = {
+    "1 Month":    30,
+    "3 Months":   90,
+    "6 Months":   180,
+    "1 Year":     365,
+    "From Start": None,
+}
+
+time_label = st.sidebar.radio("Select period", list(TIME_OPTIONS.keys()))
+time_days = TIME_OPTIONS[time_label]
+
+
+def apply_time_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    if time_days is None:
+        return df
+    cutoff = pd.Timestamp(date.today() - timedelta(days=time_days), tz="UTC")
+    df[date_col] = pd.to_datetime(df[date_col], utc=True)
+    filtered_date = df[df[date_col].isna() | (df[date_col] >= cutoff)]
+    return filtered_date
+
+
+# ---------------------------------------------------------------------------
 # App title
 # ---------------------------------------------------------------------------
 st.title("📈 Tech Stock Research")
@@ -232,14 +233,24 @@ with tab_market:
                 )
 
         # Normalise both metrics to 0–1 for stacking on same axis
-        vol_max = avg_per["relative_volume"].max()
-        tc_max = avg_per["avg_trade_count"].max()
+        all_tickers_bar = sorted(avg_per["ticker"].unique().tolist())
+        selected_tickers_bar = st.multiselect(
+            "Select tickers to compare",
+            options=all_tickers_bar,
+            default=all_tickers_bar[:14] if len(
+                all_tickers_bar) >= 3 else all_tickers_bar,
+            key="bar_ticker_select",
+        )
+        avg_per_filtered = avg_per[avg_per["ticker"].isin(
+            selected_tickers_bar)]
+        vol_max = avg_per_filtered["relative_volume"].max()
+        tc_max = avg_per_filtered["avg_trade_count"].max()
         stacked = pd.concat([
-            avg_per[["ticker", "relative_volume"]].rename(columns={"relative_volume": "value"}).assign(
-                metric="Relative Volume", value_norm=avg_per["relative_volume"] / vol_max
+            avg_per_filtered[["ticker", "relative_volume"]].rename(columns={"relative_volume": "value"}).assign(
+                metric="Relative Volume", value_norm=avg_per_filtered["relative_volume"] / vol_max
             ),
-            avg_per[["ticker", "avg_trade_count"]].rename(columns={"avg_trade_count": "value"}).assign(
-                metric="Trade Count", value_norm=avg_per["avg_trade_count"] / tc_max
+            avg_per_filtered[["ticker", "avg_trade_count"]].rename(columns={"avg_trade_count": "value"}).assign(
+                metric="Trade Count", value_norm=avg_per_filtered["avg_trade_count"] / tc_max
             ),
         ], ignore_index=True)
 

@@ -1,3 +1,4 @@
+# Terraform configuration for AWS EFS for Chroma ECS service
 resource "aws_efs_file_system" "chroma_efs" {
     creation_token = "c22-stocksiphon-chroma-efs"
 
@@ -6,6 +7,7 @@ resource "aws_efs_file_system" "chroma_efs" {
     }
 }
 
+# Create EFS mount targets in each subnet
 resource "aws_efs_mount_target" "chroma_efs_mount_a" {
     for_each = toset(var.subnet_ids)
     
@@ -14,6 +16,7 @@ resource "aws_efs_mount_target" "chroma_efs_mount_a" {
     security_groups = [aws_security_group.chroma_sg.id]
 }
 
+# Create EFS mount targets for each subnet
 resource "aws_efs_mount_target" "chroma_efs_mount_b" {
     for_each = toset(var.subnet_ids)
     
@@ -22,6 +25,7 @@ resource "aws_efs_mount_target" "chroma_efs_mount_b" {
     security_groups = [aws_security_group.chroma_sg.id]
 }
 
+# Create EFS mount targets for each subnet
 resource "aws_efs_mount_target" "chroma_efs_mount_c" {
     for_each = toset(var.subnet_ids)
     

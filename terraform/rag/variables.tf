@@ -17,3 +17,8 @@ variable "chroma_container_image" {
     description = "Docker image for Chroma"
     type        = string
 }
+
+variable "chroma_host" {
+    description = "Chroma public host"
+    type        = string
+}

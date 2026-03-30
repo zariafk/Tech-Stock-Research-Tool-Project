@@ -22,3 +22,8 @@ variable "chroma_host" {
     description = "Chroma public host"
     type        = string
 }
+
+variable "secret_name" {
+    description = "Name of the Secrets Manager secret for Chroma API key"
+    type        = string
+}

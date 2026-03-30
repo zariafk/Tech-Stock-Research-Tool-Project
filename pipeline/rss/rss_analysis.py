@@ -65,7 +65,7 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
-MAX_WORKERS = 5  # Concurrent OpenAI threads to respect rate limits
+MAX_WORKERS = 20  # Concurrent OpenAI threads to respect rate limits
 
 
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:

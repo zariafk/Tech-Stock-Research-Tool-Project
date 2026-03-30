@@ -100,22 +100,40 @@ def load(df: pd.DataFrame) -> int:
 
                 story_id = result[0]
 
-                # Insert into rss_analysis
-                cur.execute(
-                    """
-                    INSERT INTO rss_analysis
-                        (story_id, stock_id, sentiment_score, relevance_score, confidence, analysis)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        story_id,
-                        stock_id,
-                        row.get("sentiment"),
-                        row.get("relevance_score"),
-                        row.get("confidence", "Medium"),
-                        row.get("analysis"),
-                    ),
-                )
+                # Insert into rss_analysis (with fallback if confidence column missing)
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO rss_analysis
+                            (story_id, stock_id, sentiment_score, relevance_score, confidence, analysis)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            story_id,
+                            stock_id,
+                            row.get("sentiment"),
+                            row.get("relevance_score"),
+                            row.get("confidence", "Medium"),
+                            row.get("analysis"),
+                        ),
+                    )
+                except psycopg2.errors.UndefinedColumn:
+                    # Fallback for tables without confidence column
+                    logger.warning("confidence column missing from rss_analysis—inserting without it")
+                    cur.execute(
+                        """
+                        INSERT INTO rss_analysis
+                            (story_id, stock_id, sentiment_score, relevance_score, analysis)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            story_id,
+                            stock_id,
+                            row.get("sentiment"),
+                            row.get("relevance_score"),
+                            row.get("analysis"),
+                        ),
+                    )
                 total_net_new += 1
 
         conn.commit()

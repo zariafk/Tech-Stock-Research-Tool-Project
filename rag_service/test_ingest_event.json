@@ -1,0 +1,30 @@
+{
+    "source": "reddit",
+    "data": [
+        {
+            "title": "NVDA looks strong",
+            "contents": "AI demand is very high.",
+            "flair": "Discussion",
+            "created_at": "2026-03-27T12:00:00Z",
+            "post_id": "test-post-1",
+            "url": "https://example.com/post",
+            "permalink": "/r/stocks/test-post-1",
+            "author": "test_user",
+            "subreddit_id": "t5_test",
+            "subreddit_name": "stocks",
+            "subreddit_subscribers": 1000000,
+            "score": 100,
+            "ups": 95,
+            "upvote_ratio": 0.95,
+            "num_comments": 12,
+            "tickers": [
+                {
+                    "ticker": "NVDA",
+                    "analysis": "Positive sentiment from discussion.",
+                    "relevance_score": 0.9,
+                    "sentiment": "positive"
+                }
+            ]
+        }
+    ]
+}

@@ -1,17 +1,10 @@
 """
-This module contains functions for retrieving relevant documents from 
+This module contains functions for retrieving relevant documents from
 the vector store based on a user query.
 """
 
-import chromadb
-
-from app.vector_store import client
+from app.vector_store import get_collection
 from app.embed import get_embeddings
-
-
-def get_collection() -> chromadb.api.models.Collection.Collection:
-    """Get the ChromaDB collection for stock data."""
-    return client.get_or_create_collection(name="stock_data")
 
 
 def format_query(query: str, ticker: str = None) -> str:

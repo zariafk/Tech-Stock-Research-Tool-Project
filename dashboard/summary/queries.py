@@ -1,20 +1,33 @@
 import os
+import json
+
 import psycopg2
 import pandas as pd
 from dotenv import load_dotenv
+import boto3
 
 load_dotenv()
+
+SECRETS_REPO = "c22-trade-research-tool-secrets"
+
+
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
 
 
 def get_db_connection():
     """Establish connection to PostgreSQL RDS database."""
     try:
+        secrets = get_secret(SECRETS_REPO)
         return psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            dbname=os.getenv("DB_NAME"),
+            host=secrets["host"],
+            port=int(secrets["port"]),
+            user=secrets["username"],
+            password=secrets["password"],
+            dbname=secrets["dbname"],
             sslmode="require"
         )
     except psycopg2.DatabaseError as err:

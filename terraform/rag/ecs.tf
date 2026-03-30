@@ -1,3 +1,4 @@
+# Terraform configuration for AWS ECS Task Definition and Service for Chroma
 resource "aws_ecs_task_definition" "chroma_task" {
     family                   = "c22-stocksiphon-chroma"
     requires_compatibilities = ["FARGATE"]
@@ -43,5 +44,20 @@ resource "aws_ecs_task_definition" "chroma_task" {
 
             transit_encryption = "ENABLED"
         }
+    }
+}
+
+# Define the ECS service to run the Chroma task
+resource "aws_ecs_service" "chroma_service" {
+    name            = "c22-stocksiphon-chroma-service"
+    cluster         = data.aws_ecs_cluster.stocksiphon_cluster.id
+    task_definition = aws_ecs_task_definition.chroma_task.arn
+    launch_type     = "FARGATE"
+    desired_count   = 1
+
+    network_configuration {
+        subnets          = var.subnet_ids
+        security_groups  = [aws_security_group.chroma_sg.id]
+        assign_public_ip = false
     }
 }

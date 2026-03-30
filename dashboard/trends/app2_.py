@@ -8,6 +8,7 @@ Run:
     streamlit run app.py
 """
 
+from queries import HISTORY_QUERY, LIVE_QUERY, SENTIMENT_QUERY, NEWS_QUERY, REDDIT_QUERY
 import psycopg2
 import streamlit as st
 import pandas as pd
@@ -79,75 +80,27 @@ conn = st.session_state.conn
 # ---------------------------------------------------------------------------
 # Cached queries (20-minute TTL)
 # ---------------------------------------------------------------------------
+# Import queries from queries.py
+
+
 @st.cache_data(ttl=1200, show_spinner="Fetching market data...")
 def fetch_market_data(_conn) -> tuple[pd.DataFrame, pd.DataFrame]:
-    history_q = """
-        SELECT
-            s.ticker, s.stock_name,
-            h.bar_date, h.open, h.high, h.low, h.close,
-            h.volume, h.trade_count, h.vwap
-        FROM alpaca_history h
-        JOIN stock s ON s.stock_id = h.stock_id
-        ORDER BY s.ticker, h.bar_date ASC
-    """
-    live_q = """
-        SELECT
-            s.ticker, s.stock_name,
-            l.latest_time, l.open, l.high, l.low, l.close,
-            l.volume, l.trade_count, l.vwap
-        FROM alpaca_live l
-        JOIN stock s ON s.stock_id = l.stock_id
-        ORDER BY l.latest_time DESC
-    """
-    return pd.read_sql(history_q, _conn), pd.read_sql(live_q, _conn)
+    return pd.read_sql(HISTORY_QUERY, _conn), pd.read_sql(LIVE_QUERY, _conn)
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching sentiment data...")
 def fetch_sentiment(_conn) -> pd.DataFrame:
-    q = """
-        SELECT s.ticker, s.stock_name, ra.sentiment_score, 'news' AS source,
-               a.published_date AS published_at
-        FROM rss_analysis ra
-        JOIN stock s ON s.stock_id = ra.stock_id
-        JOIN rss_article a ON a.story_id = ra.story_id
-
-        UNION ALL
-
-        SELECT s.ticker, s.stock_name, rda.sentiment_score, 'reddit' AS source,
-               NULL::timestamptz AS published_at
-        FROM reddit_analysis rda
-        JOIN stock s ON s.stock_id = rda.stock_id
-    """
-    return pd.read_sql(q, _conn)
+    return pd.read_sql(SENTIMENT_QUERY, _conn)
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching news articles...")
 def fetch_news(_conn) -> pd.DataFrame:
-    q = """
-        SELECT
-            a.story_id, a.title, a.url, a.summary, a.published_date, a.source,
-            ra.sentiment_score, ra.relevance_score, ra.analysis,
-            s.ticker
-        FROM rss_article a
-        JOIN rss_analysis ra ON ra.story_id = a.story_id
-        JOIN stock s         ON s.stock_id  = ra.stock_id
-        ORDER BY a.published_date DESC
-    """
-    return pd.read_sql(q, _conn)
+    return pd.read_sql(NEWS_QUERY, _conn)
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching Reddit posts...")
 def fetch_reddit(_conn) -> pd.DataFrame:
-    q = """
-        SELECT
-            p.post_id, p.title, p.contents, p.flair, p.score,
-            p.upvote_ratio, p.num_comments, p.author, p.created_at,
-            p.permalink, sub.subreddit_name
-        FROM reddit_post p
-        JOIN subreddit sub ON sub.subreddit_id = p.subreddit_id
-        ORDER BY p.created_at DESC
-    """
-    return pd.read_sql(q, _conn)
+    return pd.read_sql(REDDIT_QUERY, _conn)
 
 
 # ---------------------------------------------------------------------------
@@ -176,20 +129,9 @@ def apply_time_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     return filtered_date
 
 
-# ---------------------------------------------------------------------------
-# App title
-# ---------------------------------------------------------------------------
-st.title("📈 Tech Stock Research")
+def dashboard():
 
-
-# ---------------------------------------------------------------------------
-# Tabs
-# ---------------------------------------------------------------------------
-tab_market, tab_news, tab_reddit = st.tabs(["Market Data", "News", "Reddit"])
-
-
-# ── Tab 1: Market Data ───────────────────────────────────────────────────────
-with tab_market:
+    # ── Tab 1: Market Data ───────────────────────────────────────────────────────
 
     try:
         df_history_raw, df_live = fetch_market_data(conn)
@@ -390,61 +332,3 @@ with tab_market:
     combined_lollipop = (
         combined_rule + combined_point).properties(height=260)
     st.altair_chart(combined_lollipop, use_container_width=True)
-
-
-# ── Tab 2: News ──────────────────────────────────────────────────────────────
-with tab_news:
-    st.subheader("News Articles")
-
-    try:
-        df_news = fetch_news(conn)
-    except Exception as e:
-        st.error(f"Failed to load news: {e}")
-        st.stop()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        ticker_filter = st.multiselect(
-            "Filter by ticker", sorted(df_news["ticker"].unique()))
-    with col2:
-        source_filter = st.multiselect(
-            "Filter by source", sorted(df_news["source"].unique()))
-
-    filtered = df_news.copy()
-    if ticker_filter:
-        filtered = filtered[filtered["ticker"].isin(ticker_filter)]
-    if source_filter:
-        filtered = filtered[filtered["source"].isin(source_filter)]
-
-    st.dataframe(
-        filtered[["published_date", "ticker", "source", "title",
-                  "sentiment_score", "relevance_score", "summary"]],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ── Tab 3: Reddit ────────────────────────────────────────────────────────────
-with tab_reddit:
-    st.subheader("Reddit Posts")
-
-    try:
-        df_reddit = fetch_reddit(conn)
-    except Exception as e:
-        st.error(f"Failed to load Reddit data: {e}")
-        st.stop()
-
-    subreddit_filter = st.multiselect(
-        "Filter by subreddit", sorted(df_reddit["subreddit_name"].unique()))
-
-    filtered_r = df_reddit.copy()
-    if subreddit_filter:
-        filtered_r = filtered_r[filtered_r["subreddit_name"].isin(
-            subreddit_filter)]
-
-    st.dataframe(
-        filtered_r[["created_at", "subreddit_name", "title", "score",
-                    "upvote_ratio", "num_comments", "author", "flair"]],
-        use_container_width=True,
-        hide_index=True,
-    )

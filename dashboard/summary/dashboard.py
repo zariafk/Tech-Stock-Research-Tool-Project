@@ -389,14 +389,9 @@ def dashboard():
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
-<<<<<<< HEAD
-                    c1.caption(f"Rel: {row['relevance_score']:.2f}")
-                    c1.caption(f"{confidence_emoji} Confidence: {confidence}")
-=======
                     confidence = row.get("confidence", "—")
                     c1.caption(
                         f"Rel: {row['relevance_score']:.2f} | {confidence}")
->>>>>>> e7d1701 (test)
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(

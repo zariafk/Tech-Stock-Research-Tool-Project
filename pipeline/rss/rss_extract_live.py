@@ -14,7 +14,8 @@ from rss_load import get_connection
 
 RSS_FEEDS = {
     'techcrunch': 'https://techcrunch.com/feed/',
-    'hackernews': 'https://hnrss.org/frontpage'
+    'hackernews': 'https://hnrss.org/frontpage',
+    'theverge': 'https://www.theverge.com/rss/index.xml',
 }
 
 
@@ -42,8 +43,12 @@ def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
     """Fetch RSS feed."""
     logger.info('LIVE: Fetching RSS: %s', url)
 
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
     try:
-        response = requests.get(url, verify=False, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
     except requests.exceptions.Timeout as e:
         logger.error('LIVE: Connection timeout for %s: %s', url, e)
         return None
@@ -110,17 +115,7 @@ def extract_live(feeds: dict) -> list[dict]:
         for entry in feed.entries:
             article = extract_entry_fields(entry, source)
 
-            # Skip articles already present in RDS (full datetime comparison)
-            if latest_date and article['published_date'] != 'N/A':
-                try:
-                    article_dt = pd.Timestamp(
-                        article['published_date'], tz='UTC')
-                    if article_dt <= latest_date:
-                        continue
-                except Exception as e:
-                    logger.warning("Failed to compare dates %s vs %s: %s",
-                                   article['published_date'], latest_date, e)
-
+            # Remove deduplication by URL
             articles.append(article)
 
     logger.info('LIVE: Extracted %d new live articles total', len(articles))

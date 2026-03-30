@@ -242,12 +242,7 @@ def dashboard():
         if not search_input:
             st.warning("Please enter a stock ticker or company name.")
             return
-
-        try:
-            stock_result = get_stock_by_ticker_or_name(search_input)
-        except Exception as err:
-            st.error("Failed to connect to database. Check environment variables.")
-            return
+        stock_result = get_stock_by_ticker_or_name(search_input)
 
         if not stock_result:
             st.error("Stock not found. Please check the ticker or company name.")
@@ -283,7 +278,8 @@ def dashboard():
                     price), f"{change:+.2f}")
             with col2:
                 st.metric("Today's Range",
-                          f"{format_price(low)} - {format_price(high)}")
+                          f"{format_price(low)} - {format_price(high)}",
+                          delta=f"{format_price(high - low)}")
             with col3:
                 st.metric("Volume", f"{volume/1e6:.1f}M" if volume else "N/A")
             with col4:
@@ -353,6 +349,9 @@ def dashboard():
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
                     c1.caption(f"Rel: {row['relevance_score']:.2f}")
+                    confidence = row.get("confidence", "—")
+                    c1.caption(
+                        f"Rel: {row['relevance_score']:.2f} | {confidence}")
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(
@@ -372,8 +371,10 @@ def dashboard():
             st.info("No Reddit discussions found for this stock yet.")
         else:
             sentiment_avg = social["sentiment_score"].mean()
+            engagement_velocity = social["created_at"].diff(
+            ).dt.total_seconds().mean()
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 sentiment_label, _ = classify_sentiment(sentiment_avg)
                 st.metric("Reddit Sentiment", sentiment_label,
@@ -383,6 +384,9 @@ def dashboard():
                 st.metric("Total Comments", f"{engagement:,}")
             with col3:
                 st.metric("Top Posts Tracked", len(social))
+            with col4:
+                st.metric("Engagement Velocity",
+                          f"{engagement_velocity:.2f} sec/post")
 
             # Social summary
             positive_count = (social["sentiment_score"] > 0.5).sum()
@@ -396,6 +400,13 @@ def dashboard():
                 st.success(summary) if positive_count > negative_count else st.warning(
                     summary)
 
+            # Sentiment drivers
+            st.subheader("Sentiment Drivers")
+            top_keywords = social["title"].str.split(
+                expand=True).stack().value_counts().head(10)
+            st.write("Top Keywords:")
+            st.write(top_keywords)
+
             # Recent posts
             st.subheader("Top Discussions")
             for idx, row in social.head(5).iterrows():
@@ -408,6 +419,36 @@ def dashboard():
                     if row["analysis"]:
                         st.markdown(
                             f"**Community Take:** {row['analysis'][:200]}...")
+
+            # Enhanced visualization
+            st.subheader("Engagement vs. Sentiment")
+            st.caption(
+                "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
+            scatter_chart = build_engagement_scatter_chart(social)
+            if scatter_chart is None:
+                st.info("No Reddit engagement data available.")
+            else:
+                st.altair_chart(scatter_chart, use_container_width=True)
+                st.caption(
+                    "Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
+
+            st.subheader("Sentiment Heatmap")
+            heatmap = (
+                alt.Chart(social)
+                .mark_rect()
+                .encode(
+                    x=alt.X("created_at:T", title="Date"),
+                    y=alt.Y("sentiment_score:Q", title="Sentiment Score"),
+                    color=alt.Color("relevance_score:Q", scale=alt.Scale(
+                        scheme="viridis"), title="Relevance"),
+                    tooltip=["title:N", "sentiment_score:Q",
+                             "relevance_score:Q"]
+                )
+            )
+            st.altair_chart(heatmap, use_container_width=True)
+
+            st.caption(
+                "Heatmap shows sentiment over time with relevance as intensity.")
 
         st.divider()
 
@@ -425,10 +466,10 @@ def dashboard():
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Institutional (News)",
+            st.metric("News",
                       f"{news_avg:+.2f}", delta_color="normal")
         with col2:
-            st.metric("Retail (Reddit)",
+            st.metric("Reddit",
                       f"{social_avg:+.2f}", delta_color="normal")
         with col3:
             div_label = "Aligned" if abs(divergence) < 0.3 else "Diverging"
@@ -502,7 +543,7 @@ def dashboard():
             st.subheader("Engagement vs. Sentiment")
             st.caption(
                 "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
-            scatter_chart = build_engagement_scatter_chart(extended_social)
+            scatter_chart = build_engagement_scatter_chart(social)
             if scatter_chart is None:
                 st.info("No Reddit engagement data available.")
             else:

@@ -1,397 +1,592 @@
-"""Unit tests for RSS extraction orchestrator."""
+"""Unit tests for RSS extraction: live and historical."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
+from datetime import datetime
+import feedparser
 import pandas as pd
-import json
 
 
 # ===== Fixtures =====
 
 @pytest.fixture
-def mock_live_articles():
-    """Mock live RSS extraction."""
-    return [
-        {
-            "title": "Apple announces new chip",
-            "link": "https://techcrunch.com/apple-chip",
-            "summary": "Apple unveiled M4 processor today.",
-            "published_date": "2026-03-26 10:00:00",
-            "source": "techcrunch",
-        }
-    ]
+def mock_feed_entry():
+    """Mock RSS feed entry."""
+    entry = MagicMock(spec=feedparser.FeedParserDict)
+    entry.title = "Apple announces new chip"
+    entry.link = "https://techcrunch.com/apple-chip"
+    entry.summary = "Apple unveiled M4 processor today."
+    entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
+    return entry
 
 
 @pytest.fixture
-def mock_historical_articles():
-    """Mock historical HN extraction."""
-    return [
-        {
-            "title": "Microsoft pushes AI limits",
-            "link": "https://news.ycombinator.com/microsoft-ai",
-            "summary": "Points: 500",
-            "published_date": "2025-06-15 14:30:00",
-            "source": "algolia_hn",
-        }
-    ]
+def mock_feed():
+    """Mock parsed RSS feed."""
+    entry = MagicMock(spec=feedparser.FeedParserDict)
+    entry.title = "Tech news"
+    entry.link = "https://example.com/news"
+    entry.summary = "Latest tech updates"
+    entry.published_parsed = (2026, 3, 26, 15, 30, 0, 0, 0, 0)
+
+    feed = MagicMock(spec=feedparser.FeedParserDict)
+    feed.entries = [entry]
+    return feed
 
 
 @pytest.fixture
-def sample_article():
-    """Single article for testing."""
+def sample_rss_feed_dict():
+    """Sample RSS feeds dictionary."""
     return {
-        "title": "Apple launches new M4 chip",
-        "link": "https://example.com/apple-m4",
-        "summary": "AAPL announced the M4 processor with 10 cores.",
-        "published_date": "2026-03-26 10:00:00",
-        "source": "techcrunch",
+        'techcrunch': 'https://techcrunch.com/feed/',
+        'hackernews': 'https://hnrss.org/frontpage'
     }
 
 
-# ===== Tests: format_ticker_prompt =====
+@pytest.fixture
+def sample_hn_hit():
+    """Mock Hacker News Algolia hit."""
+    return {
+        'title': 'Apple releases new AI features',
+        'url': 'https://apple.com/ai',
+        'story_url': 'https://news.ycombinator.com/item?id=12345',
+        'points': 250,
+        'num_comments': 45,
+        'created_at_i': 1711497600,
+    }
 
-class TestFormatTickerPrompt:
-    """Tests for format_ticker_prompt()."""
 
-    def test_prompt_includes_tickers(self, sample_article):
-        """Prompt should list all tickers in the universe."""
-        from pipeline.rss.rss_analysis import format_ticker_prompt
+@pytest.fixture
+def sample_ticker_map():
+    """Sample ticker to company name mapping."""
+    return {
+        'AAPL': 'Apple',
+        'MSFT': 'Microsoft',
+        'GOOGL': 'Google',
+    }
 
-        prompt = format_ticker_prompt(sample_article, ["AAPL", "MSFT"])
-        assert "AAPL" in prompt
-        assert "MSFT" in prompt
 
-    def test_prompt_includes_article_content(self, sample_article):
-        """Prompt should include title and summary."""
-        from pipeline.rss.rss_analysis import format_ticker_prompt
+# ===== LIVE EXTRACTION TESTS =====
 
-        prompt = format_ticker_prompt(sample_article, ["AAPL"])
-        assert sample_article["title"] in prompt
-        assert sample_article["summary"] in prompt
+class TestLiveExtraction:
+    """Tests for live RSS extraction functions."""
 
-    def test_prompt_specifies_json_output(self, sample_article):
-        """Prompt should request JSON format."""
-        from pipeline.rss.rss_analysis import format_ticker_prompt
+    # ===== Tests: extract_entry_fields =====
 
-        prompt = format_ticker_prompt(sample_article, ["AAPL"])
-        assert "JSON" in prompt
-        assert "TICKER" in prompt or '"t"' in prompt
+    class TestExtractEntryFields:
+        """Tests for extract_entry_fields()."""
 
+        def test_extracts_all_fields(self, mock_feed_entry):
+            """Should extract all RSS entry fields."""
+            from rss_extract_live import extract_entry_fields
 
-# ===== Tests: extract_keywords =====
+            result = extract_entry_fields(mock_feed_entry, "techcrunch")
 
-class TestExtractKeywords:
-    """Tests for extract_keywords()."""
+            assert result["title"] == "Apple announces new chip"
+            assert result["url"] == "https://techcrunch.com/apple-chip"
+            assert result["summary"] == "Apple unveiled M4 processor today."
+            assert result["source"] == "techcrunch"
 
-    def test_matches_ticker_symbol(self, sample_article):
-        """Should match ticker symbols in title/summary."""
-        from pipeline.rss.rss_analysis import extract_keywords
+        def test_formats_published_date(self, mock_feed_entry):
+            """Should format published_date as YYYY-MM-DD HH:MM:SS."""
+            from rss_extract_live import extract_entry_fields
 
-        matches = extract_keywords(sample_article, ["AAPL", "MSFT"])
-        assert "AAPL" in matches
+            result = extract_entry_fields(mock_feed_entry, "techcrunch")
 
-    def test_matches_company_name(self):
-        """Should match company names in title/summary."""
-        from pipeline.rss.rss_analysis import extract_keywords
+            assert result["published_date"] == "2026-03-26 10:00:00"
 
-        entry = {
-            "title": "Apple and Microsoft partner",
-            "summary": "Apple Inc announced partnership with Microsoft Corp."
-        }
-        # Assuming AAPL -> Apple in tech_universe
-        matches = extract_keywords(entry, ["AAPL", "MSFT"])
-        assert len(matches) > 0
+        def test_handles_missing_summary_falls_back_to_description(self):
+            """Should fall back to description if summary missing."""
+            from rss_extract_live import extract_entry_fields
 
-    def test_case_insensitive_matching(self):
-        """Should handle case-insensitive matching."""
-        from pipeline.rss.rss_analysis import extract_keywords
+            entry = MagicMock(spec=feedparser.FeedParserDict)
+            entry.title = "News"
+            entry.link = "https://example.com"
+            entry.get = MagicMock(
+                side_effect=lambda k, d: d if k == "summary" else "Description text")
+            entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
 
-        entry = {
-            "title": "APPLE stock rises",
-            "summary": "Apple Inc stock up today"
-        }
-        matches = extract_keywords(entry, ["AAPL"])
-        assert "AAPL" in matches
+            result = extract_entry_fields(entry, "source")
 
-    def test_returns_empty_if_no_matches(self):
-        """Should return empty list if no tickers mentioned."""
-        from pipeline.rss.rss_analysis import extract_keywords
+            assert "Description text" in result["summary"]
 
-        entry = {
-            "title": "Weather forecast for London",
-            "summary": "Rain expected tomorrow"
-        }
-        matches = extract_keywords(entry, ["AAPL", "MSFT"])
-        assert matches == []
+        def test_handles_missing_published_date(self):
+            """Should set N/A for missing published_date."""
+            from rss_extract_live import extract_entry_fields
 
+            entry = MagicMock(spec=feedparser.FeedParserDict)
+            entry.title = "News"
+            entry.link = "https://example.com"
+            entry.summary = "Summary"
+            entry.published_parsed = None
 
-# ===== Tests: parse_relevance_data =====
+            result = extract_entry_fields(entry, "source")
 
-class TestParseRelevanceData:
-    """Tests for parse_relevance_data()."""
+            assert result["published_date"] == "N/A"
 
-    def test_parses_valid_json_response(self):
-        """Should parse valid JSON with all fields."""
-        from pipeline.rss.rss_analysis import parse_relevance_data
+        def test_handles_missing_fields_with_defaults(self):
+            """Should use N/A for completely missing fields."""
+            from rss_extract_live import extract_entry_fields
 
-        response = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "Product launch"}]'
-        results = parse_relevance_data(response)
+            entry = MagicMock(spec=feedparser.FeedParserDict)
+            entry.get = MagicMock(side_effect=lambda k, d: d)
+            entry.published_parsed = None
 
-        assert len(results) == 1
-        assert results[0]["ticker"] == "AAPL"
-        assert results[0]["score"] == 9
-        assert results[0]["sentiment"] == 0.85
-        assert "Product" in results[0]["analysis"]
+            result = extract_entry_fields(entry, "source")
 
-    def test_filters_scores_below_7(self):
-        """Should only return items with score >= 7."""
-        from pipeline.rss.rss_analysis import parse_relevance_data
+            assert result["title"] == "N/A"
+            assert result["url"] == "N/A"
+            assert result["summary"] == "N/A"
 
-        response = '[{"t": "AAPL", "r": 9, "s": 0.8, "why": "Strong"}, {"t": "MSFT", "r": 5, "s": -0.2, "why": "Weak"}]'
-        results = parse_relevance_data(response)
+    # ===== Tests: fetch_feed =====
 
-        assert len(results) == 1
-        assert results[0]["ticker"] == "AAPL"
+    class TestFetchFeed:
+        """Tests for fetch_feed()."""
 
-    def test_handles_malformed_json(self):
-        """Should return empty list on JSON parse error."""
-        from pipeline.rss.rss_analysis import parse_relevance_data
+        @patch("rss_extract_live.requests.get")
+        @patch("rss_extract_live.feedparser.parse")
+        def test_successful_feed_fetch(self, mock_parse, mock_get):
+            """Should fetch and parse feed successfully."""
+            from rss_extract_live import fetch_feed
 
-        response = "This is not valid JSON{}"
-        results = parse_relevance_data(response)
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"<feed></feed>"
+            mock_get.return_value = mock_response
 
-        assert results == []
+            mock_feed = MagicMock()
+            mock_feed.entries = [MagicMock()]
+            mock_parse.return_value = mock_feed
 
-    def test_handles_dict_response(self):
-        """Should handle single dict response (not list)."""
-        from pipeline.rss.rss_analysis import parse_relevance_data
+            result = fetch_feed("https://example.com/feed")
 
-        response = '{"t": "AAPL", "r": 8, "s": 0.7, "why": "News item"}'
-        results = parse_relevance_data(response)
+            assert result is not None
+            mock_get.assert_called_once()
 
-        assert len(results) == 1
-        assert results[0]["ticker"] == "AAPL"
+        @patch("rss_extract_live.requests.get")
+        def test_handles_connection_timeout(self, mock_get):
+            """Should return None on connection timeout."""
+            from rss_extract_live import fetch_feed
 
-    def test_strips_markdown_code_blocks(self):
-        """Should strip markdown ```json ``` markers."""
-        from pipeline.rss.rss_analysis import parse_relevance_data
+            mock_get.side_effect = Exception("Timeout")
 
-        response = '```json\n[{"t": "AAPL", "r": 8, "s": 0.7, "why": "News"}]\n```'
-        results = parse_relevance_data(response)
+            result = fetch_feed("https://example.com/feed")
 
-        assert len(results) == 1
+            assert result is None
 
+        @patch("rss_extract_live.requests.get")
+        def test_handles_non_200_status_code(self, mock_get):
+            """Should return None for non-200 status codes."""
+            from rss_extract_live import fetch_feed
 
-# ===== Tests: get_ticker_analysis =====
+            mock_response = MagicMock()
+            mock_response.status_code = 404
+            mock_get.return_value = mock_response
 
-class TestGetTickerAnalysis:
-    """Tests for get_ticker_analysis() with retry logic."""
+            result = fetch_feed("https://example.com/feed")
 
-    @patch("rss_extract.CLIENT")
-    def test_successful_analysis_on_first_try(self, mock_client, sample_article):
-        """Should return analysis on successful OpenAI call."""
-        from pipeline.rss.rss_analysis import get_ticker_analysis
+            assert result is None
 
-        mock_response = MagicMock()
-        mock_response.choices[0].message.content = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "Launch"}]'
-        mock_client.chat.completions.create.return_value = mock_response
+        @patch("rss_extract_live.requests.get")
+        @patch("rss_extract_live.feedparser.parse")
+        def test_handles_empty_feed(self, mock_parse, mock_get):
+            """Should return None for feed with no entries."""
+            from rss_extract_live import fetch_feed
 
-        results = get_ticker_analysis(sample_article, ["AAPL"])
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"<feed></feed>"
+            mock_get.return_value = mock_response
 
-        assert len(results) == 1
-        assert results[0]["ticker"] == "AAPL"
-        assert mock_client.chat.completions.create.call_count == 1
+            mock_feed = MagicMock()
+            mock_feed.entries = []
+            mock_parse.return_value = mock_feed
 
-    @patch("rss_extract.time.sleep")
-    @patch("rss_extract.CLIENT")
-    def test_retries_on_rate_limit(self, mock_client, mock_sleep, sample_article):
-        """Should retry with backoff on rate limit error."""
-        from pipeline.rss.rss_analysis import get_ticker_analysis
+            result = fetch_feed("https://example.com/feed")
 
-        # First attempt: rate limit, Second attempt: success
-        rate_limit_error = Exception("rate_limit_exceeded")
-        success_response = MagicMock()
-        success_response.choices[0].message.content = '[{"t": "AAPL", "r": 8, "s": 0.7, "why": "Hit"}]'
+            assert result is None
 
-        mock_client.chat.completions.create.side_effect = [
-            rate_limit_error, success_response]
+    # ===== Tests: get_latest_article_date =====
 
-        results = get_ticker_analysis(sample_article, ["AAPL"], max_retries=3)
+    class TestGetLatestArticleDate:
+        """Tests for get_latest_article_date()."""
 
-        assert len(results) == 1
-        assert mock_client.chat.completions.create.call_count == 2
-        mock_sleep.assert_called_once_with(1)  # 2^0 = 1 second backoff
+        @patch("rss_extract_live.get_connection")
+        def test_returns_latest_date_from_rds(self, mock_get_conn):
+            """Should return latest published_date from RDS."""
+            from rss_extract_live import get_latest_article_date
 
-    @patch("rss_extract.CLIENT")
-    def test_returns_empty_after_max_retries(self, mock_client, sample_article):
-        """Should return empty list after exhausting retries."""
-        from pipeline.rss.rss_analysis import get_ticker_analysis
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = ("2026-03-26 15:00:00",)
+            mock_conn = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+            mock_get_conn.return_value = mock_conn
 
-        mock_client.chat.completions.create.side_effect = Exception(
-            "rate_limit_exceeded")
+            result = get_latest_article_date()
 
-        results = get_ticker_analysis(sample_article, ["AAPL"], max_retries=2)
+            assert result is not None
+            assert isinstance(result, pd.Timestamp)
 
-        assert results == []
-        assert mock_client.chat.completions.create.call_count == 2
+        @patch("rss_extract_live.get_connection")
+        def test_returns_none_when_no_articles_in_db(self, mock_get_conn):
+            """Should return None when database is empty."""
+            from rss_extract_live import get_latest_article_date
 
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (None,)
+            mock_conn = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+            mock_get_conn.return_value = mock_conn
 
-# ===== Tests: filter_by_ticker =====
+            result = get_latest_article_date()
 
-class TestFilterByTicker:
-    """Tests for filter_by_ticker()."""
+            assert result is None
 
-    @patch("rss_extract.CLIENT")
-    def test_skips_articles_with_no_keyword_matches(self, mock_client):
-        """Should skip articles that don't mention any tickers."""
-        from pipeline.rss.rss_analysis import filter_by_ticker
+        @patch("rss_extract_live.get_connection")
+        def test_handles_db_connection_error(self, mock_get_conn):
+            """Should return None on database connection error."""
+            from rss_extract_live import get_latest_article_date
 
-        article = {
-            "title": "Weather in London",
-            "summary": "Rain expected tomorrow.",
-            "link": "https://example.com"
-        }
+            mock_get_conn.side_effect = Exception("Connection failed")
 
-        results = filter_by_ticker([article], ["AAPL", "MSFT"])
+            result = get_latest_article_date()
 
-        assert len(results) == 0
-        mock_client.chat.completions.create.assert_not_called()
+            assert result is None
 
-    @patch("rss_extract.CLIENT")
-    def test_calls_openai_for_matching_articles(self, mock_client, sample_article):
-        """Should call OpenAI for articles with keyword matches."""
-        from pipeline.rss.rss_analysis import filter_by_ticker
+        @patch("rss_extract_live.get_connection")
+        def test_handles_timezone_aware_timestamps(self, mock_get_conn):
+            """Should handle timezone-aware timestamps from RDS."""
+            from rss_extract_live import get_latest_article_date
 
-        mock_response = MagicMock()
-        mock_response.choices[0].message.content = '[{"t": "AAPL", "r": 9, "s": 0.85, "why": "News"}]'
-        mock_client.chat.completions.create.return_value = mock_response
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = ("2026-03-26 15:00:00+00:00",)
+            mock_conn = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+            mock_get_conn.return_value = mock_conn
 
-        results = filter_by_ticker([sample_article], ["AAPL", "MSFT"])
+            result = get_latest_article_date()
 
-        assert len(results) == 1
-        assert results[0]["ticker"] == "AAPL"
-        mock_client.chat.completions.create.assert_called_once()
+            assert result is not None
 
+    # ===== Tests: extract_live =====
 
-# ===== Tests: create_dataframe =====
+    class TestExtractLive:
+        """Tests for extract_live()."""
 
-class TestCreateDataframe:
-    """Tests for create_dataframe()."""
+        @patch("rss_extract_live.get_latest_article_date")
+        @patch("rss_extract_live.fetch_feed")
+        def test_extracts_all_feeds(self, mock_fetch, mock_get_latest):
+            """Should extract articles from all feeds."""
+            from rss_extract_live import extract_live
 
-    def test_empty_list_returns_empty_dataframe(self):
-        """Should return empty DataFrame for empty article list."""
-        from pipeline.rss.rss_analysis import create_dataframe
+            mock_get_latest.return_value = None
 
-        df = create_dataframe([])
-        assert isinstance(df, pd.DataFrame)
-        assert df.empty
+            entry = MagicMock()
+            entry.title = "News"
+            entry.link = "https://example.com"
+            entry.get = MagicMock(side_effect=lambda k, d: d)
+            entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
 
-    def test_creates_article_id_hash(self, sample_article):
-        """Should generate MD5 article_id from link."""
-        from pipeline.rss.rss_analysis import create_dataframe
+            mock_feed = MagicMock()
+            mock_feed.entries = [entry]
+            mock_fetch.return_value = mock_feed
 
-        article_with_result = sample_article.copy()
-        article_with_result.update(
-            {"score": 9, "sentiment": 0.85, "analysis": "News"})
+            feeds = {"source1": "url1", "source2": "url2"}
+            result = extract_live(feeds)
 
-        df = create_dataframe([article_with_result])
+            assert len(result) == 2
+            assert mock_fetch.call_count == 2
 
-        assert "article_id" in df.columns
-        assert len(df["article_id"].iloc[0]) == 32  # MD5 hash length
+        @patch("rss_extract_live.get_latest_article_date")
+        @patch("rss_extract_live.fetch_feed")
+        def test_filters_articles_by_date(self, mock_fetch, mock_get_latest):
+            """Should skip articles older than latest in RDS."""
+            from rss_extract_live import extract_live
 
-    def test_includes_all_required_columns(self, sample_article):
-        """Should include all required columns."""
-        from pipeline.rss.rss_analysis import create_dataframe
+            latest_date = pd.Timestamp("2026-03-26 12:00:00", tz="UTC")
+            mock_get_latest.return_value = latest_date
 
-        article_with_result = sample_article.copy()
-        article_with_result.update(
-            {"score": 9, "sentiment": 0.85, "analysis": "News"})
+            entry = MagicMock()
+            entry.title = "Old news"
+            entry.link = "https://example.com/old"
+            entry.get = MagicMock(side_effect=lambda k, d: d)
+            entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
 
-        df = create_dataframe([article_with_result])
+            mock_feed = MagicMock()
+            mock_feed.entries = [entry]
+            mock_fetch.return_value = mock_feed
 
-        required = ["ticker", "article_id", "title", "link", "summary",
-                    "published_date", "source", "score", "sentiment", "analysis"]
-        for col in required:
-            assert col in df.columns
+            result = extract_live({"source": "url"})
 
-    def test_converts_published_date_to_datetime(self, sample_article):
-        """Should convert published_date to datetime."""
-        from pipeline.rss.rss_analysis import create_dataframe
+            assert len(result) == 0
 
-        article_with_result = sample_article.copy()
-        article_with_result.update(
-            {"score": 9, "sentiment": 0.85, "analysis": "News"})
+        @patch("rss_extract_live.get_latest_article_date")
+        @patch("rss_extract_live.fetch_feed")
+        def test_handles_failed_feed_fetch(self, mock_fetch, mock_get_latest):
+            """Should skip feeds that fail to fetch."""
+            from rss_extract_live import extract_live
 
-        df = create_dataframe([article_with_result])
+            mock_get_latest.return_value = None
+            mock_fetch.return_value = None
 
-        assert pd.api.types.is_datetime64_any_dtype(df["published_date"])
+            result = extract_live({"source": "url"})
 
-    def test_sorts_by_ticker_and_date(self, sample_article):
-        """Should sort by ticker, then by published_date descending."""
-        from pipeline.rss.rss_analysis import create_dataframe
+            assert len(result) == 0
 
-        article1 = sample_article.copy()
-        article1.update({"ticker": "AAPL", "score": 9, "sentiment": 0.85,
-                        "analysis": "Old", "published_date": "2026-01-01 10:00:00"})
+        @patch("rss_extract_live.get_latest_article_date")
+        @patch("rss_extract_live.fetch_feed")
+        def test_preserves_article_source(self, mock_fetch, mock_get_latest):
+            """Should preserve source name in extracted articles."""
+            from rss_extract_live import extract_live
 
-        article2 = sample_article.copy()
-        article2["link"] = "https://example.com/new"
-        article2.update({"ticker": "AAPL", "score": 8, "sentiment": 0.7,
-                        "analysis": "New", "published_date": "2026-03-26 10:00:00"})
+            mock_get_latest.return_value = None
 
-        df = create_dataframe([article1, article2])
+            entry = MagicMock()
+            entry.title = "News"
+            entry.link = "https://example.com"
+            entry.get = MagicMock(side_effect=lambda k, d: d)
+            entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
 
-        # Newer article should come first
-        assert df.iloc[0]["published_date"] > df.iloc[1]["published_date"]
+            mock_feed = MagicMock()
+            mock_feed.entries = [entry]
+            mock_fetch.return_value = mock_feed
 
+            result = extract_live({"techcrunch": "url"})
 
-# ===== Tests: deduplicate_raw =====
+            assert result[0]["source"] == "techcrunch"
 
-class TestDeduplicateRaw:
-    """Tests for deduplicate_raw()."""
 
-    def test_removes_duplicate_links(self):
-        """Should remove articles with duplicate links."""
-        from pipeline.rss.rss_analysis import deduplicate_raw
+# ===== HISTORICAL EXTRACTION TESTS =====
 
-        article = {
-            "title": "News",
-            "link": "https://example.com/news",
-            "summary": "Summary",
-            "published_date": "2026-03-26 10:00:00",
-            "source": "tech"
-        }
+class TestHistoricalExtraction:
+    """Tests for historical Hacker News extraction functions."""
 
-        results = deduplicate_raw([article, article, article])
+    # ===== Tests: get_hn_historical =====
 
-        assert len(results) == 1
+    class TestGetHnHistorical:
+        """Tests for get_hn_historical()."""
 
-    def test_preserves_unique_articles(self):
-        """Should preserve articles with unique links."""
-        from pipeline.rss.rss_analysis import deduplicate_raw
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_fetches_hn_stories_successfully(self, mock_get, sample_hn_hit):
+            """Should fetch Hacker News stories via Algolia API."""
+            from seed_historical.rss_extract_historical import get_hn_historical
 
-        articles = [
-            {"title": "A", "link": "https://a.com", "summary": "1",
-                "published_date": "2026-03-26 10:00:00", "source": "tech"},
-            {"title": "B", "link": "https://b.com", "summary": "2",
-                "published_date": "2026-03-26 10:00:00", "source": "tech"},
-            {"title": "C", "link": "https://c.com", "summary": "3",
-                "published_date": "2026-03-26 10:00:00", "source": "tech"},
-        ]
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"hits": [sample_hn_hit]}
+            mock_get.return_value = mock_response
 
-        results = deduplicate_raw(articles)
+            result = get_hn_historical("Apple")
 
-        assert len(results) == 3
+            assert len(result) > 0
+            assert result[0]["title"] == "Apple releases new AI features"
+            assert result[0]["source"] == "hackernews"
 
-    def test_preserves_first_occurrence(self):
-        """Should keep the first occurrence of duplicate."""
-        from pipeline.rss.rss_analysis import deduplicate_raw
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_limits_results_to_max_results(self, mock_get, sample_hn_hit):
+            """Should limit results to HN_MAX_RESULTS."""
+            from seed_historical.rss_extract_historical import get_hn_historical, HN_MAX_RESULTS
 
-        article1 = {"title": "First", "link": "https://example.com",
-                    "summary": "1", "published_date": "2026-03-26 10:00:00", "source": "tech"}
-        article2 = {"title": "Second", "link": "https://example.com",
-                    "summary": "2", "published_date": "2026-03-26 10:00:00", "source": "tech"}
+            hits = [sample_hn_hit] * (HN_MAX_RESULTS + 10)
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"hits": hits}
+            mock_get.return_value = mock_response
 
-        results = deduplicate_raw([article1, article2])
+            result = get_hn_historical("Apple")
 
-        assert results[0]["title"] == "First"
+            assert len(result) <= HN_MAX_RESULTS
+
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_handles_api_failure(self, mock_get):
+            """Should return empty list on API error."""
+            from seed_historical.rss_extract_historical import get_hn_historical
+
+            mock_response = MagicMock()
+            mock_response.status_code = 503
+            mock_get.return_value = mock_response
+
+            result = get_hn_historical("Apple")
+
+            assert result == []
+
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_handles_network_error(self, mock_get):
+            """Should return empty list on network error."""
+            from seed_historical.rss_extract_historical import get_hn_historical
+
+            mock_get.side_effect = Exception("Network error")
+
+            result = get_hn_historical("Apple")
+
+            assert result == []
+
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_formats_published_date_from_timestamp(self, mock_get):
+            """Should convert Unix timestamp to YYYY-MM-DD HH:MM:SS."""
+            from seed_historical.rss_extract_historical import get_hn_historical
+
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "hits": [{
+                    "title": "Test",
+                    "url": "https://example.com",
+                    "points": 100,
+                    "num_comments": 10,
+                    "created_at_i": 1711497600,
+                }]
+            }
+            mock_get.return_value = mock_response
+
+            result = get_hn_historical("Apple")
+
+            assert len(result[0]["published_date"]) == 19
+            assert result[0]["published_date"].count("-") == 2
+
+        @patch("seed_historical.rss_extract_historical.requests.get")
+        def test_includes_engagement_metrics_in_summary(self, mock_get):
+            """Should include points and comments in summary."""
+            from seed_historical.rss_extract_historical import get_hn_historical
+
+            hit = {
+                "title": "News story",
+                "points": 250,
+                "num_comments": 45,
+                "created_at_i": 1711497600,
+            }
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"hits": [hit]}
+            mock_get.return_value = mock_response
+
+            result = get_hn_historical("Apple")
+
+            assert "250" in result[0]["summary"]
+            assert "45" in result[0]["summary"]
+
+    # ===== Tests: _extract_for_ticker =====
+
+    class TestExtractForTicker:
+        """Tests for _extract_for_ticker()."""
+
+        @patch("seed_historical.rss_extract_historical.get_hn_historical")
+        def test_tags_articles_with_ticker(self, mock_get_hn):
+            """Should add ticker to each article."""
+            from seed_historical.rss_extract_historical import _extract_for_ticker
+
+            mock_article = {
+                "title": "News",
+                "url": "https://example.com",
+                "summary": "Summary",
+                "published_date": "2026-03-26 10:00:00",
+                "source": "hackernews",
+            }
+            mock_get_hn.return_value = [mock_article]
+
+            result = _extract_for_ticker(("AAPL", "Apple"))
+
+            assert len(result) == 1
+            assert result[0]["ticker"] == "AAPL"
+
+        @patch("seed_historical.rss_extract_historical.get_hn_historical")
+        def test_returns_empty_when_no_articles(self, mock_get_hn):
+            """Should return empty list when no articles found."""
+            from seed_historical.rss_extract_historical import _extract_for_ticker
+
+            mock_get_hn.return_value = []
+
+            result = _extract_for_ticker(("AAPL", "Apple"))
+
+            assert result == []
+
+        @patch("seed_historical.rss_extract_historical.get_hn_historical")
+        def test_preserves_article_fields(self, mock_get_hn):
+            """Should preserve all original article fields."""
+            from seed_historical.rss_extract_historical import _extract_for_ticker
+
+            mock_article = {
+                "title": "News",
+                "url": "https://example.com",
+                "summary": "Summary",
+                "published_date": "2026-03-26 10:00:00",
+                "source": "hackernews",
+            }
+            mock_get_hn.return_value = [mock_article]
+
+            result = _extract_for_ticker(("AAPL", "Apple"))
+
+            assert result[0]["title"] == "News"
+            assert result[0]["url"] == "https://example.com"
+            assert result[0]["summary"] == "Summary"
+
+    # ===== Tests: extract_historical =====
+
+    class TestExtractHistorical:
+        """Tests for extract_historical()."""
+
+        @patch("seed_historical.rss_extract_historical._extract_for_ticker")
+        def test_extracts_from_all_tickers(self, mock_extract_ticker, sample_ticker_map):
+            """Should extract from all tickers in map."""
+            from seed_historical.rss_extract_historical import extract_historical
+
+            mock_extract_ticker.return_value = [
+                {"ticker": "AAPL", "title": "News"}
+            ]
+
+            result = extract_historical(sample_ticker_map)
+
+            assert mock_extract_ticker.call_count == len(sample_ticker_map)
+
+        @patch("seed_historical.rss_extract_historical._extract_for_ticker")
+        def test_flattens_results(self, mock_extract_ticker, sample_ticker_map):
+            """Should flatten list of lists into single list."""
+            from seed_historical.rss_extract_historical import extract_historical
+
+            mock_extract_ticker.return_value = [
+                {"ticker": "AAPL", "title": "News"}]
+
+            result = extract_historical(sample_ticker_map)
+
+            assert isinstance(result, list)
+            assert all(isinstance(item, dict) for item in result)
+
+        @patch("seed_historical.rss_extract_historical._extract_for_ticker")
+        def test_aggregates_all_articles(self, mock_extract_ticker, sample_ticker_map):
+            """Should aggregate articles from all tickers."""
+            from seed_historical.rss_extract_historical import extract_historical
+
+            mock_extract_ticker.side_effect = [
+                [{"ticker": "AAPL", "title": "News1"}],
+                [{"ticker": "MSFT", "title": "News2"}],
+                [{"ticker": "GOOGL", "title": "News3"}],
+            ]
+
+            result = extract_historical(sample_ticker_map)
+
+            assert len(result) == 3
+            tickers = [item["ticker"] for item in result]
+            assert "AAPL" in tickers
+            assert "MSFT" in tickers
+            assert "GOOGL" in tickers
+
+        @patch("seed_historical.rss_extract_historical._extract_for_ticker")
+        def test_handles_empty_ticker_map(self, mock_extract_ticker):
+            """Should handle empty ticker map gracefully."""
+            from seed_historical.rss_extract_historical import extract_historical
+
+            result = extract_historical({})
+
+            assert result == []
+            mock_extract_ticker.assert_not_called()
+
+        @patch("seed_historical.rss_extract_historical._extract_for_ticker")
+        def test_handles_failed_extraction_for_ticker(self, mock_extract_ticker, sample_ticker_map):
+            """Should skip tickers with failed extraction."""
+            from seed_historical.rss_extract_historical import extract_historical
+
+            mock_extract_ticker.side_effect = [[], [], []]
+
+            result = extract_historical(sample_ticker_map)
+
+            assert result == []

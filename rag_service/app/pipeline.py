@@ -86,4 +86,9 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None, top_
     answer = generate_answer(user_query, context, task_type)
 
     sources_text = format_sources(retrieved_docs)
+
+    if answer.strip() == "I do not have enough information to answer that question."\
+            or answer.strip() == "I do not have enough information":
+        return answer
+
     return f"{answer}\n\nSources:\n{sources_text}"

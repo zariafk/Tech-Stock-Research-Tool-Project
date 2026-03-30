@@ -8,7 +8,8 @@ Run:
     streamlit run app.py
 """
 
-from queries import HISTORY_QUERY, LIVE_QUERY, SENTIMENT_QUERY, NEWS_QUERY, REDDIT_QUERY
+from .queries import HISTORY_QUERY, LIVE_QUERY, SENTIMENT_QUERY, NEWS_QUERY, REDDIT_QUERY
+from .charts import build_stacked_bar_chart, build_price_line_chart, build_sentiment_lollipop_chart
 import psycopg2
 import streamlit as st
 import pandas as pd
@@ -16,18 +17,10 @@ import altair as alt
 from datetime import date, timedelta
 from dotenv import load_dotenv
 import os
+import json
+import boto3
 
 load_dotenv()
-
-
-# ---------------------------------------------------------------------------
-# Page config
-# ---------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Tech Stock Research",
-    page_icon="📈",
-    layout="wide",
-)
 
 
 # ---------------------------------------------------------------------------
@@ -103,11 +96,6 @@ def fetch_reddit(_conn) -> pd.DataFrame:
     return pd.read_sql(REDDIT_QUERY, _conn)
 
 
-# ---------------------------------------------------------------------------
-# Sidebar — Time filter
-# ---------------------------------------------------------------------------
-st.sidebar.header("Time Range")
-
 TIME_OPTIONS = {
     "1 Month":    30,
     "3 Months":   90,
@@ -116,11 +104,9 @@ TIME_OPTIONS = {
     "From Start": None,
 }
 
-time_label = st.sidebar.radio("Select period", list(TIME_OPTIONS.keys()))
-time_days = TIME_OPTIONS[time_label]
 
-
-def apply_time_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+def apply_time_filter(df: pd.DataFrame, date_col: str, time_days: int | None) -> pd.DataFrame:
+    """Filters a DataFrame to rows within the last time_days days. Returns full df if time_days is None."""
     if time_days is None:
         return df
     cutoff = pd.Timestamp(date.today() - timedelta(days=time_days), tz="UTC")
@@ -131,7 +117,18 @@ def apply_time_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
 
 def dashboard():
 
-    # ── Tab 1: Market Data ───────────────────────────────────────────────────────
+    # ── Time Range Filter ────────────────────────────────────────────────────────
+    time_label = st.radio(
+        "Time Range",
+        list(TIME_OPTIONS.keys()),
+        horizontal=True,
+        key="trends_time_range",
+    )
+    time_days = TIME_OPTIONS[time_label]
+
+    st.divider()
+
+    # ── Market Data ──────────────────────────────────────────────────────────────
 
     try:
         df_history_raw, df_live = fetch_market_data(conn)
@@ -141,7 +138,8 @@ def dashboard():
         st.stop()
 
     # Apply time filter to history
-    df_history = apply_time_filter(df_history_raw.copy(), "bar_date")
+    df_history = apply_time_filter(
+        df_history_raw.copy(), "bar_date", time_days)
 
     # Compute relative volume per ticker:
     # avg volume in selected period / avg volume across all time
@@ -156,11 +154,11 @@ def dashboard():
 
     col_left, col_right = st.columns(2)
 
-    # ── Chart 2: Relative volume vs trade count — stacked bar ────────────────
-    with col_right:
+    # ── Chart 2: Relative volume vs trade count ────────────────
+    with col_left:
         chart2_title, chart2_info = st.columns([10, 1])
         with chart2_title:
-            st.markdown("#### Relative Volume vs Trade Count — Stacked")
+            st.markdown("#### Relative Volume vs Trade Count")
         with chart2_info:
             with st.popover("ℹ️"):
                 st.markdown(
@@ -185,32 +183,8 @@ def dashboard():
         )
         avg_per_filtered = avg_per[avg_per["ticker"].isin(
             selected_tickers_bar)]
-        vol_max = avg_per_filtered["relative_volume"].max()
-        tc_max = avg_per_filtered["avg_trade_count"].max()
-        stacked = pd.concat([
-            avg_per_filtered[["ticker", "relative_volume"]].rename(columns={"relative_volume": "value"}).assign(
-                metric="Relative Volume", value_norm=avg_per_filtered["relative_volume"] / vol_max
-            ),
-            avg_per_filtered[["ticker", "avg_trade_count"]].rename(columns={"avg_trade_count": "value"}).assign(
-                metric="Trade Count", value_norm=avg_per_filtered["avg_trade_count"] / tc_max
-            ),
-        ], ignore_index=True)
 
-        stacked_chart = (
-            alt.Chart(stacked)
-            .mark_bar()
-            .encode(
-                x=alt.X("ticker:N", title="Ticker",
-                        axis=alt.Axis(labelAngle=-45)),
-                y=alt.Y("value_norm:Q",
-                        title="Normalised Value (0–1)", stack="zero"),
-                color=alt.Color("metric:N", legend=alt.Legend(title="Metric")),
-                tooltip=["ticker:N", "metric:N", alt.Tooltip("value:Q", format=".2f"), alt.Tooltip(
-                    "value_norm:Q", format=".2f", title="Normalised")],
-            )
-            .properties(height=260)
-            .interactive()
-        )
+        stacked_chart = build_stacked_bar_chart(avg_per, avg_per_filtered)
         st.altair_chart(stacked_chart, use_container_width=True)
 
     # ── Chart 4: Close price over time — multi-ticker ─────────────────────────
@@ -242,32 +216,13 @@ def dashboard():
         if df_line.empty:
             st.info("Select at least one ticker above.")
         else:
-            highlight = alt.selection_point(fields=["ticker"], bind="legend")
-
-            line_chart = (
-                alt.Chart(df_line)
-                .mark_line()
-                .encode(
-                    x=alt.X("bar_date:T", title="Date"),
-                    y=alt.Y("close:Q", title="Close Price (USD)",
-                            scale=alt.Scale(zero=False)),
-                    color=alt.Color(
-                        "ticker:N", legend=alt.Legend(title="Ticker")),
-                    opacity=alt.condition(
-                        highlight, alt.value(1), alt.value(0.15)),
-                    tooltip=["ticker:N", "bar_date:T", alt.Tooltip(
-                        "close:Q", format=".2f"), alt.Tooltip("volume:Q", format=",")],
-                )
-                .add_params(highlight)
-                .properties(height=320)
-                .interactive()
-            )
+            line_chart = build_price_line_chart(df_line)
             st.altair_chart(line_chart, use_container_width=True)
 
     # ── Chart 5: Combined sentiment lollipop (avg across sources) ─────────────
     chart5_title, chart5_info = st.columns([10, 1])
     with chart5_title:
-        st.markdown("#### Combined Avg Sentiment by Ticker")
+        st.markdown("#### Avg Sentiment by Ticker")
     with chart5_info:
         with st.popover("ℹ️"):
             st.markdown(
@@ -282,7 +237,7 @@ def dashboard():
             )
 
     df_combined = (
-        apply_time_filter(df_sentiment_raw.copy(), "published_at")
+        apply_time_filter(df_sentiment_raw.copy(), "published_at", time_days)
         .groupby("ticker")["sentiment_score"]
         .mean()
         .reset_index()
@@ -291,44 +246,5 @@ def dashboard():
         lambda s: "Positive" if s >= 0 else "Negative"
     )
 
-    sentiment_colour = alt.Color(
-        "direction:N",
-        scale=alt.Scale(domain=["Positive", "Negative"],
-                        range=["#2ecc71", "#e74c3c"]),
-        legend=alt.Legend(title="Sentiment"),
-    )
-    ticker_sort = alt.EncodingSortField(
-        field="sentiment_score", op="mean", order="descending")
-
-    ticker_axis = alt.Axis(labelAngle=-45, labelOverlap=False)
-
-    combined_rule = (
-        alt.Chart(df_combined)
-        .mark_rule(strokeWidth=2)
-        .encode(
-            x=alt.X("ticker:N", title="Ticker", sort=ticker_sort,
-                    axis=ticker_axis),
-            y=alt.Y("sentiment_score:Q", title="Avg Sentiment Score",
-                    scale=alt.Scale(domain=[-1, 1])),
-            y2=alt.datum(0),
-            color=sentiment_colour,
-        )
-    )
-
-    combined_point = (
-        alt.Chart(df_combined)
-        .mark_point(size=100, filled=True)
-        .encode(
-            x=alt.X("ticker:N", title="Ticker", sort=ticker_sort,
-                    axis=ticker_axis),
-            y=alt.Y("sentiment_score:Q", title="Avg Sentiment Score",
-                    scale=alt.Scale(domain=[-1, 1])),
-            color=sentiment_colour,
-            tooltip=["ticker:N", "direction:N",
-                     alt.Tooltip("sentiment_score:Q", format=".3f")],
-        )
-    )
-
-    combined_lollipop = (
-        combined_rule + combined_point).properties(height=260)
+    combined_lollipop = build_sentiment_lollipop_chart(df_combined)
     st.altair_chart(combined_lollipop, use_container_width=True)

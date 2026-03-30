@@ -1,268 +1,27 @@
 import altair as alt
 import streamlit as st
 import pandas as pd
-from queries import (
+from .queries import (
     get_stock_by_ticker_or_name,
     get_market_data,
     get_news_signals,
     get_social_signals,
     get_extended_social,
 )
-
-
-def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """Scatter of num_comments vs sentiment. High comments + negative sentiment = heated debate."""
-    if social.empty:
-        return None
-
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
-        .encode(x="x:Q")
-    )
-
-    scatter = (
-        alt.Chart(social)
-        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
-        .encode(
-            x=alt.X("sentiment_score:Q", title="Sentiment Score",
-                    scale=alt.Scale(domain=[-1.2, 1.2])),
-            y=alt.Y("num_comments:Q", title="Comments"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="viridis"), title="Relevance"),
-            size=alt.Size("ups:Q", scale=alt.Scale(
-                range=[40, 600]), title="Upvotes"),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "num_comments:Q",
-                "ups:Q",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-            ],
-        )
-    )
-
-    return (zero_rule + scatter).properties
-
-
-def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> alt.LayerChart | None:
-    """Layer price line with Reddit sentiment dots. Click a dot to surface the post below."""
-    if history.empty or social.empty:
-        return None
-
-    history = history.copy()
-    history["bar_date"] = pd.to_datetime(history["bar_date"])
-
-    social = social.copy()
-    social["date"] = pd.to_datetime(social["created_at"]).dt.normalize()
-    social_merged = social.merge(
-        history[["bar_date", "close"]], left_on="date", right_on="bar_date", how="inner"
-    )
-
-    if history.empty or social.empty:
-        return None, None
-
-    selection = alt.selection_point(fields=["post_id"], name="convergence_sel")
-
-    price_line = (
-        alt.Chart(history)
-        .mark_line(strokeWidth=2, color="#4A90D9")
-        .encode(
-            x=alt.X("bar_date:T", title="Date"),
-            y=alt.Y("close:Q", title="Price ($)", scale=alt.Scale(zero=False)),
-        )
-    )
-
-    sentiment_dots = (
-        alt.Chart(social_merged)
-        .mark_circle(stroke="white", strokeWidth=0.5)
-        .encode(
-            x=alt.X("date:T"),
-            y=alt.Y("close:Q"),
-            size=alt.Size("relevance_score:Q", scale=alt.Scale(
-                range=[40, 450]), title="Relevance"),
-            color=alt.Color(
-                "sentiment_score:Q",
-                scale=alt.Scale(scheme="redyellowgreen", domain=[-1, 1]),
-                title="Sentiment",
-            ),
-            opacity=alt.condition(selection, alt.value(1.0), alt.value(0.35)),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-                "confidence:N",
-            ],
-        )
-        .add_params(selection)
-    )
-
-    volume_bar = (
-        alt.Chart(history)
-        .mark_bar(color="#cbd5e0")
-        .encode(
-            x=alt.X("bar_date:T", axis=None),
-            y=alt.Y("volume:Q", title=None)
-        )
-        .properties(height=60)
-    )
-
-    main_chart = (price_line + sentiment_dots).properties(height=350)
-    chart = alt.vconcat(main_chart, volume_bar).resolve_scale(x='shared')
-    return chart, social_merged
-
-
-def build_sentiment_momentum_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """Rolling 7-day relevance-weighted sentiment area chart, green above zero and red below."""
-    if social.empty or len(social) < 3:
-        return None
-
-    daily = social.copy()
-    daily["date"] = pd.to_datetime(daily["created_at"]).dt.normalize()
-    daily["weighted"] = daily["sentiment_score"] * daily["relevance_score"]
-    daily = (
-        daily.groupby("date")
-        .agg(weighted_sum=("weighted", "sum"), relevance_sum=("relevance_score", "sum"))
-        .reset_index()
-    )
-    daily["daily_sentiment"] = daily["weighted_sum"] / \
-        daily["relevance_sum"].replace(0, float("nan"))
-    daily = daily.sort_values("date")
-    daily["rolling_sentiment"] = daily["daily_sentiment"].rolling(
-        window=7, min_periods=1).mean()
-
-    positive_area = (
-        alt.Chart(daily)
-        .transform_calculate(clipped="max(datum.rolling_sentiment, 0)")
-        .mark_area(color="#2ecc71", opacity=0.45, interpolate="monotone")
-        .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("clipped:Q", title="Weighted Sentiment (7d avg)"),
-            y2=alt.Y2(datum=0),
-        )
-    )
-
-    negative_area = (
-        alt.Chart(daily)
-        .transform_calculate(clipped="min(datum.rolling_sentiment, 0)")
-        .mark_area(color="#e74c3c", opacity=0.45, interpolate="monotone")
-        .encode(
-            x=alt.X("date:T"),
-            y=alt.Y("clipped:Q"),
-            y2=alt.Y2(datum=0),
-        )
-    )
-
-    midline = (
-        alt.Chart(daily)
-        .mark_line(color="white", strokeWidth=1.5)
-        .encode(
-            x=alt.X("date:T"),
-            y=alt.Y("rolling_sentiment:Q"),
-            tooltip=["date:T", alt.Tooltip(
-                "rolling_sentiment:Q", format=".3f", title="Rolling Sentiment")],
-        )
-    )
-
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"y": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.7)
-        .encode(y="y:Q")
-    )
-
-    return (positive_area + negative_area + midline + zero_rule).properties(height=220)
-
-
-def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """Scatter of upvotes vs sentiment, colored by relevance. High-neg + high-ups = retail panic signal."""
-    if social.empty:
-        return None
-
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
-        .encode(x="x:Q")
-    )
-
-    scatter = (
-        alt.Chart(social)
-        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
-        .encode(
-            x=alt.X("sentiment_score:Q", title="Sentiment Score",
-                    scale=alt.Scale(domain=[-1.2, 1.2])),
-            y=alt.Y("ups:Q", title="Upvotes"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="viridis"), title="Relevance"),
-            size=alt.Size("num_comments:Q", scale=alt.Scale(
-                range=[40, 600]), title="Comments"),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "ups:Q",
-                "num_comments:Q",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-                "confidence:N",
-            ],
-        )
-    )
-
-    return (zero_rule + scatter).properties(height=300)
-
-
-def build_news_horizon_chart(news: pd.DataFrame) -> alt.Chart | None:
-    """Strip plot of news coverage density by source over time. Clusters signal breaking news."""
-    if news.empty:
-        return None
-
-    news = news.copy()
-    news["published_date"] = pd.to_datetime(news["published_date"])
-    chart_height = max(200, news["source"].nunique() * 32)
-
-    return (
-        alt.Chart(news)
-        .mark_circle(size=90)
-        .encode(
-            x=alt.X("published_date:T", title="Published Date"),
-            y=alt.Y("source:N", title="Source", sort="-x"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="orangered"), title="Relevance"),
-            opacity=alt.Opacity("relevance_score:Q",
-                                scale=alt.Scale(range=[0.15, 1.0])),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "published_date:T",
-                "confidence:N",
-            ],
-        )
-        .properties(height=chart_height)
-    )
-
-
-def classify_sentiment(score: float | None) -> tuple[str, str]:
-    """Convert sentiment score to plain English classification."""
-    if score is None:
-        return "Unknown", "gray"
-    if score > 0.5:
-        return "🟢 Positive", "green"
-    elif score < -0.5:
-        return "🔴 Negative", "red"
-    else:
-        return "🟡 Neutral", "orange"
-
-
-def format_price(val):
-    """Format price with 2 decimals."""
-    return f"${val:,.2f}" if val else "N/A"
+from .charts import (
+    build_comments_vs_sentiment_chart,
+    build_signal_convergence_chart,
+    build_sentiment_momentum_chart,
+    build_engagement_scatter_chart,
+    build_news_horizon_chart,
+    classify_sentiment,
+    format_price,
+)
 
 
 def dashboard():
-    st.set_page_config(
-        page_title="Stock Intelligence Dashboard", layout="wide")
-    st.title("📊 Stock Intelligence Dashboard")
     st.caption(
-        "Consolidated view of market data, news signals, and community sentiment")
+        "Consolidated view of market data, news signals, and community sentiment for specific stocks.")
     st.divider()
 
     col1, col2 = st.columns([3, 1])
@@ -440,13 +199,6 @@ def dashboard():
                 st.success(summary) if positive_count > negative_count else st.warning(
                     summary)
 
-            # Sentiment drivers
-            st.subheader("Sentiment Drivers")
-            top_keywords = social["title"].str.split(
-                expand=True).stack().value_counts().head(10)
-            st.write("Top Keywords:")
-            st.write(top_keywords)
-
             # Recent posts
             st.subheader("Top Discussions")
             for idx, row in social.head(5).iterrows():
@@ -464,35 +216,7 @@ def dashboard():
                     with col_b:
                         st.caption(
                             f"{confidence_emoji} Confidence: {confidence}")
-            # Enhanced visualization
-            st.subheader("Engagement vs. Sentiment")
-            st.caption(
-                "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
-            scatter_chart = build_engagement_scatter_chart(social)
-            if scatter_chart is None:
-                st.info("No Reddit engagement data available.")
-            else:
-                st.altair_chart(scatter_chart, use_container_width=True)
-                st.caption(
-                    "Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
-            st.subheader("Sentiment Heatmap")
-            heatmap = (
-                alt.Chart(social)
-                .mark_rect()
-                .encode(
-                    x=alt.X("created_at:T", title="Date"),
-                    y=alt.Y("sentiment_score:Q", title="Sentiment Score"),
-                    color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                        scheme="viridis"), title="Relevance"),
-                    tooltip=["title:N", "sentiment_score:Q",
-                             "relevance_score:Q", "confidence:N"]
-                )
-            )
-            st.altair_chart(heatmap, use_container_width=True)
-
-            st.caption(
-                "Heatmap shows sentiment over time with relevance as intensity. Hover to see confidence level.")
         news_avg = news["sentiment_score"].mean() if not news.empty else 0
         social_avg = social["sentiment_score"].mean(
         ) if not social.empty else 0

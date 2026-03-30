@@ -96,7 +96,7 @@ def run_pipeline() -> None:
         logger.info("Starting load")
 
         result = join_tables_to_json(
-            fact_posts, dim_subreddits, fact_post_tickers)
+            fact_posts, dim_subreddits, fact_post_tickers, fact_post_tickers)
 
         logger.info("Starting load")
 

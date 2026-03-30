@@ -12,23 +12,21 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://arctic-shift.photon-reddit.com/api/posts/search"
 REQUEST_TIMEOUT = 30
-DEFAULT_MAX_POSTS = 10
+DEFAULT_MAX_POSTS = 100
 
 
 def fetch_day(
     subreddit: str,
     date: datetime,
     *,
-    page_size: int = 100,
     max_posts: int = DEFAULT_MAX_POSTS,
     retries: int = 3,
 ) -> list[dict]:
-    """Fetches posts for a single subreddit on a single day.
+    """Fetches the top posts for a single subreddit on a single day.
 
-    Retrieves all posts for the day, ranks them by engagement
-    (score + num_comments), and returns the top `max_posts`.
-    This ensures we keep the most relevant posts rather than
-    just the first ones chronologically.
+    Uses Arctic Shift's sort parameter to request posts ordered by
+    score descending, so we only need a single API call to get the
+    most relevant posts — no pagination required.
     """
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
@@ -37,55 +35,30 @@ def fetch_day(
         "subreddit": subreddit,
         "after": int(start.timestamp()),
         "before": int(end.timestamp()),
-        "limit": page_size,
+        "sort": "score",
+        "order": "desc",
+        "limit": max_posts,
     }
 
-    all_posts = []
+    for attempt in range(retries):
+        response = requests.get(
+            BASE_URL, params=params, timeout=REQUEST_TIMEOUT
+        )
 
-    while True:
-        success = False
+        if response.ok:
+            return response.json().get("data", [])
 
-        for attempt in range(retries):
-            response = requests.get(
-                BASE_URL, params=params, timeout=REQUEST_TIMEOUT
+        if response.status_code == 429:
+            wait = int(
+                response.headers.get("Retry-After", 5 * (attempt + 1))
             )
-
-            if response.ok:
-                data = response.json().get("data", [])
-                all_posts.extend(data)
-                success = True
-                break
-
-            if response.status_code == 429:
-                wait = int(
-                    response.headers.get("Retry-After", 5 * (attempt + 1))
-                )
-                logger.warning("Rate limited, waiting %s seconds", wait)
-                time.sleep(wait)
-            else:
-                logger.error("Request failed: %s", response.status_code)
-                break
-
-        if not success or len(data) < page_size:
+            logger.warning("Rate limited, waiting %s seconds", wait)
+            time.sleep(wait)
+        else:
+            logger.error("Request failed: %s", response.status_code)
             break
 
-        # Paginate forward using the last post's timestamp
-        params["after"] = data[-1]["created_utc"]
-
-    # Rank by engagement and keep the top max_posts
-    if len(all_posts) > max_posts:
-        all_posts.sort(
-            key=lambda p: p.get("score", 0) + p.get("num_comments", 0),
-            reverse=True,
-        )
-        logger.info(
-            "r/%s %s: trimmed %d posts to top %d by engagement",
-            subreddit, date.strftime("%Y-%m-%d"),
-            len(all_posts), max_posts,
-        )
-        all_posts = all_posts[:max_posts]
-
-    return all_posts
+    return []
 
 
 def generate_date_range(
@@ -103,7 +76,7 @@ def extract_historical(
     start_date: datetime,
     end_date: datetime,
     max_posts: int = DEFAULT_MAX_POSTS,
-    delay: float = 1.0,
+    delay: float = 0.2,
 ) -> list[dict]:
     """Extracts historical posts for all subreddits across a date range."""
     dates = generate_date_range(start_date, end_date)

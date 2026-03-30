@@ -1,111 +1,13 @@
-import os
-import psycopg2
 import altair as alt
 import streamlit as st
 import pandas as pd
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-def get_db_connection():
-    """Establish connection to PostgreSQL RDS database."""
-    try:
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            dbname=os.getenv("DB_NAME"),
-            sslmode="require"
-        )
-    except psycopg2.DatabaseError as err:
-        st.error("Failed to connect to database. Check environment variables.")
-        raise
-
-
-def get_stock_by_ticker_or_name(search_term):
-    """Search for stock by ticker or name."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    search_lower = search_term.lower()
-
-    cursor.execute("""
-        SELECT stock_id, ticker, stock_name FROM stock
-        WHERE LOWER(ticker) = %s OR LOWER(stock_name) LIKE %s
-        LIMIT 1
-    """, (search_lower, f"%{search_lower}%"))
-
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return result
-
-
-def get_market_data(stock_id):
-    """Get latest market data and historical trend."""
-    conn = get_db_connection()
-
-    latest = pd.read_sql_query("""
-        SELECT close, open, high, low, volume, latest_time FROM alpaca_live
-        WHERE stock_id = %s
-        ORDER BY latest_time DESC LIMIT 1
-    """, conn, params=(stock_id,))
-
-    history = pd.read_sql_query("""
-        SELECT bar_date, open, high, low, close, volume FROM alpaca_history
-        WHERE stock_id = %s
-        ORDER BY bar_date DESC LIMIT 30
-    """, conn, params=(stock_id,))
-
-    conn.close()
-    return latest, history
-
-
-def get_news_signals(stock_id):
-    """Get RSS news articles with sentiment analysis."""
-    conn = get_db_connection()
-    news = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rss.title, rss.summary, rss.published_date, rss.source
-        FROM rss_analysis ra
-        JOIN rss_article rss ON ra.story_id = rss.story_id
-        WHERE ra.stock_id = %s
-        ORDER BY rss.published_date DESC LIMIT 20
-    """, conn, params=(stock_id,))
-    conn.close()
-    return news
-
-
-def get_social_signals(stock_id):
-    """Get Reddit posts with sentiment analysis."""
-    conn = get_db_connection()
-    social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rp.title, rp.score, rp.num_comments, rp.created_at, rp.url
-        FROM reddit_analysis ra
-        JOIN reddit_post rp ON ra.story_id = rp.post_id
-        WHERE ra.stock_id = %s
-        ORDER BY rp.created_at DESC LIMIT 20
-    """, conn, params=(stock_id,))
-    conn.close()
-    return social
-
-
-def get_extended_social(stock_id: int) -> pd.DataFrame:
-    """Get Reddit posts with full engagement data (ups, contents) for chart rendering."""
-    conn = get_db_connection()
-    social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rp.post_id, rp.title, rp.contents, rp.score, rp.ups,
-               rp.upvote_ratio, rp.num_comments, rp.created_at
-        FROM reddit_analysis ra
-        JOIN reddit_post rp ON ra.story_id = rp.post_id
-        WHERE ra.stock_id = %s
-        ORDER BY rp.created_at DESC LIMIT 200
-    """, conn, params=(stock_id,))
-    conn.close()
-    return social
+from queries import (
+    get_stock_by_ticker_or_name,
+    get_market_data,
+    get_news_signals,
+    get_social_signals,
+    get_extended_social,
+)
 
 
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> alt.LayerChart | None:
@@ -341,7 +243,11 @@ def dashboard():
             st.warning("Please enter a stock ticker or company name.")
             return
 
-        stock_result = get_stock_by_ticker_or_name(search_input)
+        try:
+            stock_result = get_stock_by_ticker_or_name(search_input)
+        except Exception as err:
+            st.error("Failed to connect to database. Check environment variables.")
+            return
 
         if not stock_result:
             st.error("Stock not found. Please check the ticker or company name.")

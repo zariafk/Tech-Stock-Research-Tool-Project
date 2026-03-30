@@ -16,4 +16,6 @@ COPY rss_transform.py .
 
 COPY rss_load.py .
 
+COPY rag_ingest_invoke.py .
+
 CMD ["rss_pipeline.lambda_handler"]

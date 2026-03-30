@@ -32,7 +32,8 @@ def format_sources(retrieved_docs: list) -> str:
         meta = doc["metadata"]
         source = meta.get("source", "unknown")
         ticker = meta.get("ticker", "")
-        date = meta.get("date") or meta.get("timestamp", "")
+        date = meta.get("date") or meta.get(
+            "timestamp") or meta.get("published_date", "unknown")
         url = meta.get("url")
 
         if url:
@@ -85,4 +86,9 @@ def answer_query(user_query: str, ticker: str = None, sources: list = None, top_
     answer = generate_answer(user_query, context, task_type)
 
     sources_text = format_sources(retrieved_docs)
+
+    if answer.strip() == "I do not have enough information to answer that question."\
+            or answer.strip() == "I do not have enough information":
+        return answer
+
     return f"{answer}\n\nSources:\n{sources_text}"

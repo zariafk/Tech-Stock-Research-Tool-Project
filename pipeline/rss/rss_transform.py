@@ -12,6 +12,8 @@ from pathlib import Path
 import pandas as pd
 from logger import logger
 
+from rag_ingest_invoke import invoke_rag_ingest
+
 
 REQUIRED_COLUMNS = [
     "ticker",
@@ -87,7 +89,7 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
     df = drop_incomplete_rows(df)
     df = normalise_published_date(df)
     df = deduplicate(df)
-    prepare_for_rag(df)
+    invoke_rag_ingest(source="rss", data=prepare_for_rag(df))
     df = df[REQUIRED_COLUMNS]
     logger.info("Transform complete. %d rows remaining.", len(df))
     return df

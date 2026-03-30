@@ -32,7 +32,7 @@ def generate_chat_prompt(query: str, context: str) -> str:
             You are a stock research assistant.
 
             Answer the user's question using only the context below.
-            If the answer is not in the context, say you do not have enough information.
+            If the answer is not in the context, say you do not have enough information, and do not give any sources in this case.
 
             Give precise information, with contextual details, like date and time where appropriate, 
             and avoid making assumptions or adding information not present in the context.

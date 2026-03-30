@@ -2,7 +2,7 @@
 
 set -e
 # Load from environment variables (set in CI/CD or export before running)
-AWS_ACCOUNT_ID="129033205317"
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-2"
 REPO_NAME="c22-stocksiphon-rss-ecr"
 TAG="latest"

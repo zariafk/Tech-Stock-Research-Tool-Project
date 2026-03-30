@@ -14,7 +14,7 @@ resource "aws_lambda_function" "ingest_lambda" {
 
     environment {
         variables = {
-            SECRET_NAME = "c22-trade-research-tool-secrets"
+            SECRET_NAME = var.secret_name
             CHROMA_HOST = var.chroma_host
         }
     }
@@ -31,7 +31,7 @@ resource "aws_lambda_function" "query_lambda" {
 
     environment {
         variables = {
-            SECRET_NAME = "c22-trade-research-tool-secrets"
+            SECRET_NAME = var.secret_name
             CHROMA_HOST = var.chroma_host
         }
     }

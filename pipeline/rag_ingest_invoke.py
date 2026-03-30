@@ -6,6 +6,7 @@ lambda_client = boto3.client("lambda", region_name="eu-west-2")
 
 
 def invoke_rag_ingest(source: str, data: list) -> None:
+    """Invoke the RAG ingest Lambda function with the given source and data."""
     logger.info("Invoking RAG ingest Lambda for source '%s' with %d records",
                 source, len(data))
     payload = {

@@ -83,6 +83,7 @@ def join_tables_to_json(
     fact_posts: pd.DataFrame,
     dim_subreddits: pd.DataFrame,
     fact_post_tickers: pd.DataFrame,
+    reddit_analysis: pd.DataFrame,
 ) -> list[dict]:
     """Joins all three tables, nesting ticker analysis per post."""
     joined = fact_posts.merge(dim_subreddits, on="subreddit_id", how="left")

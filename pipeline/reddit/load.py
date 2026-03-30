@@ -89,7 +89,8 @@ def join_tables_to_json(
     records = joined.to_dict(orient="records")
 
     # Group ticker results by post_id for fast lookup
-    ticker_cols = ["ticker", "relevance_score", "sentiment", "analysis"]
+    ticker_cols = ["ticker", "relevance_score",
+                   "sentiment", "analysis", "confidence"]
     ticker_groups = (
         fact_post_tickers.groupby("post_id")[ticker_cols]
         .apply(lambda g: g.to_dict(orient="records"))
@@ -123,7 +124,7 @@ def build_story_stock_df(
     if fact_post_tickers.empty:
         return pd.DataFrame(columns=[
             "story_id", "stock_id", "sentiment_score",
-            "relevance_score", "analysis",
+            "relevance_score", "analysis", "confidence",
         ])
 
     df = fact_post_tickers.copy()
@@ -145,7 +146,7 @@ def build_story_stock_df(
 
     return df[[
         "story_id", "stock_id", "sentiment_score",
-        "relevance_score", "analysis",
+        "relevance_score", "analysis", "confidence",
     ]]
 
 

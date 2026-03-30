@@ -12,33 +12,42 @@ from openai import OpenAI, RateLimitError, APIError
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = 3
+MAX_WORKERS = 20
 
 
 def format_ticker_prompt(post: dict, tickers: list[str]) -> str:
-    """Builds the OpenAI prompt for a single post."""
     return f"""
     Act as: Senior Quant Analyst.
     Universe: {", ".join(tickers)}
     Input: "{post['title']}" | "{post['contents']}"
-
-    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
-
+    Task: Score Relevance (0-10), Sentiment (-1.0 to 1.0), and Confidence in your scoring.
     Relevance Rubric:
     - 10: Direct idiosyncratic event (Earnings, M&A).
     - 8: Significant business news (New product, contract).
     - 7: Indirect impact (Competitor/Sector news).
     - <7: Ignore.
-
-    Sentiment Rubric (Strictly use these values):
-    - 1.0: Transformational positive news.
-    - 0.5: Incremental/Standard positive news.
-    - 0.0: Neutral/Mixed news.
-    - -0.5: Incremental negative news.
-    - -1.0: Catastrophic negative news.
-
+    Sentiment Rubric (Score from -1.0 to 1.0 in 0.1 increments):
+    - +1.0: Transformational/Systemic positive (M&A, massive earnings beat).
+    - +0.7 to +0.9: Strong positive (Major product launch, key contract win).
+    - +0.3 to +0.6: Moderate positive (Positive analyst upgrade, steady growth).
+    - +0.1 to +0.2: Slight positive (Minor positive mention, general market lift).
+    - 0.0: Neutral, administrative, or purely factual noise.
+    - -0.1 to -0.2: Slight negative (Minor litigation, general market drag).
+    - -0.3 to -0.6: Moderate negative (Missed estimates, management turnover).
+    - -0.7 to -0.9: Strong negative (Regulatory investigation, product recall).
+    - -1.0: Catastrophic (Bankruptcy, fraud, massive data breach).
+    Confidence Scoring:
+    - High: Clear signal. Direct quotes, confirmed by multiple sources, or explicit event.
+    - Medium: Reasonable inference but some ambiguity. Analyst opinion or sector trend.
+    - Low: Speculative or based on rumor. Requires corroboration.
     Output Format (JSON list):
-    [{{"t": "TICKER", "r": score, "s": score, "why": "one sentence justification"}}]
+    [{{
+      "t": "TICKER",
+      "r": score,
+      "s": score,
+      "c": "High|Medium|Low",
+      "why": "one sentence justification"
+    }}]
     """
 
 
@@ -78,7 +87,8 @@ def parse_relevance_data(response: str) -> list[dict]:
                     "ticker": item.get('t'),
                     "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
-                    "analysis": item.get('why')
+                    "analysis": item.get('why'),
+                    "confidence": item.get("c")
                 })
         return results
     except json.JSONDecodeError as e:
@@ -149,6 +159,7 @@ def _analyse_single_post(args: tuple) -> list[dict]:
             "relevance_score": result["relevance_score"],
             "sentiment": result["sentiment"],
             "analysis": result["analysis"],
+            "confidence": result["confidence"],
         }
         for result in results
     ]
@@ -192,9 +203,52 @@ def analyse_posts(
     if df.empty:
         logger.warning("No relevant ticker matches found")
         return pd.DataFrame(columns=[
-            "post_id", "ticker", "relevance_score", "sentiment", "analysis",
+            "post_id", "ticker", "relevance_score", "sentiment", "analysis", "confidence"
         ])
 
     df = df.drop_duplicates(subset=["post_id", "ticker"])
     logger.info("fact_post_tickers: %d rows", len(df))
     return df
+
+
+if __name__ == "__main__":
+    test_articles = [
+        {
+            'title': 'Apple Reports Record Q4 Earnings Beat',
+            'contents': 'Apple beat earnings estimates by 15%, guidance strong',
+            'url': 'test_1',
+            'source': 'Bloomberg'
+        },
+        {
+            'title': 'Apple stock drops on mixed analyst commentary',
+            'contents': 'Some analysts downgrade, others maintain hold ratings',
+            'url': 'test_2',
+            'source': 'Reuters'
+        },
+        {
+            'title': 'Apple might launch new feature next year maybe',
+            'contents': 'Rumors suggest Apple could possibly announce something',
+            'url': 'test_3',
+            'source': 'MobileTech Blog'
+        },
+        {
+            'title': 'Sources: Apple developing new A-series processor architecture',
+            'contents': 'People familiar with Apple\'s plans suggest chip redesign underway',
+            'url': 'test_low',
+            'source': 'Tech Analyst Blog'
+        }
+    ]
+
+    print("Testing confidence scoring...\n")
+    for article in test_articles:
+        print(f"Testing: {article['title']}")
+        result = get_ticker_analysis(
+            article, ['AAPL'], OpenAI(os.environ["OPENAI_API_KEY"]))
+        if result:
+            for item in result:
+                print(f"  contents: {item['contents']:.2f}")
+                print(f"  Confidence: {item['confidence']}")
+                print(f"  Analysis: {item['analysis']}")
+        else:
+            print("  No results")
+        print(result)

@@ -1,9 +1,8 @@
-FROM python:3.14-slim
+FROM python:3.13-slim
 
 COPY summary/requirements.txt .
 
-RUN apt-get update && apt-get install -y libpq-dev gcc && \
-    pip3 install -r requirements.txt
+RUN pip3 install -r requirements.txt
 
 COPY summary/dashboard.py .
 COPY summary/queries.py .

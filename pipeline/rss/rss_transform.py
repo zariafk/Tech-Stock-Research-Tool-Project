@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 from logger import logger
 
-from pipeline.rag_ingest_invoke import invoke_rag_ingest
+from rag_ingest_invoke import invoke_rag_ingest
 
 
 REQUIRED_COLUMNS = [

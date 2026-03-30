@@ -32,7 +32,8 @@ def format_sources(retrieved_docs: list) -> str:
         meta = doc["metadata"]
         source = meta.get("source", "unknown")
         ticker = meta.get("ticker", "")
-        date = meta.get("date") or meta.get("timestamp", "")
+        date = meta.get("date") or meta.get(
+            "timestamp") or meta.get("published_date", "unknown")
         url = meta.get("url")
 
         if url:

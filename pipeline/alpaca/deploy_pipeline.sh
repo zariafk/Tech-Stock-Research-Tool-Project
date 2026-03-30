@@ -1,23 +1,24 @@
+#!/bin/bash
 set -e
 
-AWS_REGION="eu-west-2"
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION="eu-west-2"
 REPO_NAME="c22-stocksiphon-alpaca-ecr"
-IMAGE_TAG="latest"
-ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
+TAG="latest"
+
+ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}"
 
 echo "Authenticating Docker with ECR..."
-aws ecr get-login-password --region "$AWS_REGION" \
-  | docker login --username AWS --password-stdin \
-    "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+aws ecr get-login-password --region "$REGION" | \
+    docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
-echo "Building Docker image..."
-docker build --platform linux/amd64 --provenance=false -t "${REPO_NAME}:${IMAGE_TAG}" .
+echo "Building image..."
+docker build --platform linux/amd64 --provenance=false -t "${REPO_NAME}:${TAG}" .
 
-echo "Tagging image for ECR..."
-docker tag "${REPO_NAME}:${IMAGE_TAG}" "${ECR_URI}:${IMAGE_TAG}"
+echo "Tagging image..."
+docker tag "${REPO_NAME}:${TAG}" "${ECR_URI}:${TAG}"
 
-echo "Pushing image to ECR..."
-docker push "${ECR_URI}:${IMAGE_TAG}"
+echo "Pushing to ECR..."
+docker push "${ECR_URI}:${TAG}"
 
-echo "Done! Image pushed to: ${ECR_URI}:${IMAGE_TAG}"
+echo "Done! Image pushed to: ${ECR_URI}:${TAG}"

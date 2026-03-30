@@ -16,3 +16,7 @@ terraform {
 provider "aws" {
     region = "eu-west-2"
 }
+
+data "aws_ecs_cluster" "stocksiphon_cluster" {
+    cluster_name = var.ecs_cluster_name
+}

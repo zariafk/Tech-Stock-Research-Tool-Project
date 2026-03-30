@@ -20,7 +20,9 @@ resource "aws_lambda_function" "c22_stocksiphon_reddit_lambda" {
   image_uri     = "${aws_ecr_repository.c22_stocksiphon_reddit_ecr.repository_url}:latest"
   package_type  = "Image"
   timeout       = 600
+  memory_size   = 512
 }
+
 
 resource "aws_iam_role" "c22_stocksiphon_lambda_role" {
   name = "c22-stocksiphon-lambda-role"

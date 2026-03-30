@@ -37,7 +37,6 @@ def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
     """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
     client = boto3.client("secretsmanager", region_name=region)
     response = client.get_secret_value(SecretId=secret_name)
-    return json.loads(response["SecretString"])
 
 
 def get_connection():

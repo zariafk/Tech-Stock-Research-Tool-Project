@@ -8,7 +8,7 @@ resource "aws_security_group" "chroma_sg" {
         from_port   = 8000
         to_port     = 8000
         protocol    = "tcp"
-        cidr_blocks = [cidrsubnet("10.0.0.0/8", 0, 0)]
+        cidr_blocks = ["0.0.0.0/0"]
     }
 
     egress {

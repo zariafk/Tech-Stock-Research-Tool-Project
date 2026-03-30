@@ -58,6 +58,6 @@ resource "aws_ecs_service" "chroma_service" {
     network_configuration {
         subnets          = var.subnet_ids
         security_groups  = [aws_security_group.chroma_sg.id]
-        assign_public_ip = false
+        assign_public_ip = true
     }
 }

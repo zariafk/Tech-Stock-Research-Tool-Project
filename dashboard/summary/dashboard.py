@@ -10,39 +10,66 @@ from queries import (
 )
 
 
-def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """Scatter of num_comments vs sentiment. High comments + negative sentiment = heated debate."""
+def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.Chart | None:
+    """Scatter of comment-to-upvote ratio vs sentiment. High ratio + negative sentiment = heated debate."""
     if social.empty:
         return None
 
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
-        .encode(x="x:Q")
-    )
+    df = social.copy()
+    df["comment_ratio"] = df["num_comments"] / df["ups"].replace(0, 1)
+
+    # Fit x-axis to actual data with a small buffer
+    sent_min = df["sentiment_score"].min()
+    sent_max = df["sentiment_score"].max()
+    buffer = (sent_max - sent_min) * 0.15
+    x_domain = [sent_min - buffer, sent_max + buffer]
 
     scatter = (
-        alt.Chart(social)
+        alt.Chart(df)
         .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
         .encode(
             x=alt.X("sentiment_score:Q", title="Sentiment Score",
-                    scale=alt.Scale(domain=[-1.2, 1.2])),
-            y=alt.Y("num_comments:Q", title="Comments"),
+                    scale=alt.Scale(domain=x_domain)),
+            y=alt.Y("comment_ratio:Q", title="Comments / Upvotes"),
             color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="viridis"), title="Relevance"),
-            size=alt.Size("ups:Q", scale=alt.Scale(
-                range=[40, 600]), title="Upvotes"),
+                scheme="viridis"), title="Relevance",
+                legend=alt.Legend(
+                    orient="bottom",
+                    direction="horizontal",
+                    gradientLength=200,
+            )),
+            size=alt.Size("num_comments:Q", scale=alt.Scale(
+                range=[40, 500]), title="Comments",
+                legend=alt.Legend(
+                    orient="bottom",
+                    direction="horizontal",
+                    symbolLimit=4,
+                    columns=4,
+                    clipHeight=30,
+            )),
             tooltip=[
                 "title:N",
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
+                alt.Tooltip("comment_ratio:Q", format=".2f",
+                            title="Comments/Ups"),
                 "num_comments:Q",
                 "ups:Q",
                 alt.Tooltip("relevance_score:Q", format=".2f"),
             ],
         )
+        .properties(
+            height=350,
+            padding={"top": 10, "bottom": 60, "left": 10, "right": 10},
+        )
+        .configure_legend(
+            titleFontSize=12,
+            labelFontSize=11,
+            padding=10,
+            columnPadding=15,
+        )
     )
 
-    return (zero_rule + scatter).properties
+    return scatter
 
 
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> alt.LayerChart | None:
@@ -240,6 +267,96 @@ def build_news_horizon_chart(news: pd.DataFrame) -> alt.Chart | None:
     )
 
 
+def build_source_comparison_chart(
+    news: pd.DataFrame, social: pd.DataFrame
+) -> alt.LayerChart | None:
+    """Scatter of relevance vs sentiment across RSS and Reddit sources.
+    Reveals which sources consistently surface high-relevance, strong-sentiment insights."""
+    if news.empty and social.empty:
+        return None
+
+    frames = []
+
+    if not news.empty:
+        nf = news[["sentiment_score", "relevance_score", "title", "source"]].copy()
+        nf["source_type"] = "News"
+        nf["label"] = nf["source"]
+        if "confidence" in news.columns:
+            nf["confidence"] = news["confidence"]
+        else:
+            nf["confidence"] = "Unknown"
+        frames.append(nf)
+
+    if not social.empty:
+        sf = social[["sentiment_score", "relevance_score", "title"]].copy()
+        sf["source_type"] = "Reddit"
+        sf["label"] = "Reddit"
+        if "confidence" in social.columns:
+            sf["confidence"] = social["confidence"]
+        else:
+            sf["confidence"] = "Unknown"
+        frames.append(sf)
+
+    combined = pd.concat(frames, ignore_index=True)
+
+    if combined.empty:
+        return None
+
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.5)
+        .encode(x="x:Q")
+    )
+
+    relevance_mid = (
+        alt.Chart(pd.DataFrame({"y": [combined["relevance_score"].median()]}))
+        .mark_rule(color="gray", strokeDash=[2, 6], opacity=0.4)
+        .encode(y="y:Q")
+    )
+
+    scatter = (
+        alt.Chart(combined)
+        .mark_circle(opacity=0.8, stroke="white", strokeWidth=0.5)
+        .encode(
+            x=alt.X(
+                "sentiment_score:Q",
+                title="Sentiment Score",
+                scale=alt.Scale(domain=[-1.2, 1.2]),
+            ),
+            y=alt.Y("relevance_score:Q", title="Relevance Score"),
+            color=alt.Color(
+                "label:N",
+                title="Source",
+                scale=alt.Scale(scheme="category10"),
+            ),
+            shape=alt.Shape(
+                "source_type:N",
+                title="Type",
+                scale=alt.Scale(
+                    domain=["News", "Reddit"],
+                    range=["circle", "diamond"],
+                ),
+            ),
+            size=alt.Size(
+                "relevance_score:Q",
+                scale=alt.Scale(range=[40, 500]),
+                title="Relevance",
+                legend=None,
+            ),
+            tooltip=[
+                "title:N",
+                alt.Tooltip("sentiment_score:Q", format=".2f"),
+                alt.Tooltip("relevance_score:Q", format=".2f"),
+                "label:N",
+                "source_type:N",
+                "confidence:N",
+            ],
+        )
+    )
+
+    return (zero_rule + relevance_mid + scatter).properties(height=350)
+
+
 def classify_sentiment(score: float | None) -> tuple[str, str]:
     """Convert sentiment score to plain English classification."""
     if score is None:
@@ -389,14 +506,9 @@ def dashboard():
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
-<<<<<<< HEAD
-                    c1.caption(f"Rel: {row['relevance_score']:.2f}")
-                    c1.caption(f"{confidence_emoji} Confidence: {confidence}")
-=======
                     confidence = row.get("confidence", "—")
                     c1.caption(
                         f"Rel: {row['relevance_score']:.2f} | {confidence}")
->>>>>>> e7d1701 (test)
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(
@@ -528,13 +640,12 @@ def dashboard():
         st.caption(
             "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
-        va_tab1, va_tab2, va_tab3, va_tab4, va_tab5, va_tab6 = st.tabs([
+        va_tab1, va_tab2, va_tab3, va_tab4, va_tab5 = st.tabs([
             "📌 Signal Convergence",
             "📈 Sentiment Momentum",
-            "📊 Signal vs Price",
-            "💥 Engagement Matrix",
-            "💬 Comments vs Sentiment",
+            "💥 Discussion Intensity",
             "📰 News Horizon",
+            "🔍 Source Comparison",
         ])
 
         with va_tab1:
@@ -581,16 +692,15 @@ def dashboard():
                 st.altair_chart(momentum_chart, use_container_width=True)
 
         with va_tab3:
-            st.subheader("Engagement vs. Sentiment")
+            st.subheader("Discussion Intensity vs. Sentiment")
             st.caption(
-                "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
-            scatter_chart = build_engagement_scatter_chart(social)
+                "Y-axis is comments/upvotes ratio — high values mean heated debate. Top-left = controversial and bearish.")
+            scatter_chart = build_comments_vs_sentiment_chart(
+                extended_social)
             if scatter_chart is None:
                 st.info("No Reddit engagement data available.")
             else:
                 st.altair_chart(scatter_chart, use_container_width=True)
-                st.caption(
-                    "Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
         with va_tab4:
             st.subheader("News Coverage Density")
@@ -603,16 +713,20 @@ def dashboard():
                 st.altair_chart(horizon_chart, use_container_width=True)
 
         with va_tab5:
-            st.subheader("Comments vs. Sentiment")
+            st.subheader("Sentiment × Relevance by Source")
             st.caption(
-                "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
-            comments_chart = build_comments_vs_sentiment_chart(extended_social)
-            if comments_chart is None:
-                st.info("No Reddit data available.")
+                "Compares RSS news outlets (circles) against Reddit posts (diamonds). "
+                "Points in the top-right quadrant are high-relevance, positive-sentiment — your most actionable insights. "
+                "The dashed horizontal line marks median relevance.")
+            source_chart = build_source_comparison_chart(news, extended_social)
+            if source_chart is None:
+                st.info("No news or social data available to compare sources.")
             else:
-                st.altair_chart(comments_chart, use_container_width=True)
-
-        st.divider()
+                st.altair_chart(source_chart, use_container_width=True)
+                st.caption(
+                    "Reading guide: **Top-right** = relevant & bullish | "
+                    "**Top-left** = relevant & bearish (institutional caution?) | "
+                    "**Bottom** = low relevance, safe to deprioritise")
 
         # --- ECONOMIC CONTEXT ---
         st.header("Broader Economic Context")

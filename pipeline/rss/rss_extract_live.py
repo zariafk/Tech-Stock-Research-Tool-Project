@@ -115,17 +115,7 @@ def extract_live(feeds: dict) -> list[dict]:
         for entry in feed.entries:
             article = extract_entry_fields(entry, source)
 
-            # Skip articles already present in RDS (full datetime comparison)
-            if latest_date and article['published_date'] != 'N/A':
-                try:
-                    article_dt = pd.Timestamp(
-                        article['published_date'], tz='UTC')
-                    if article_dt <= latest_date:
-                        continue
-                except Exception as e:
-                    logger.warning("Failed to compare dates %s vs %s: %s",
-                                   article['published_date'], latest_date, e)
-
+            # Remove deduplication by URL
             articles.append(article)
 
     logger.info('LIVE: Extracted %d new live articles total', len(articles))

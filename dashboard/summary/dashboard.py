@@ -1,111 +1,48 @@
-import os
-import psycopg2
 import altair as alt
 import streamlit as st
 import pandas as pd
-from dotenv import load_dotenv
+from queries import (
+    get_stock_by_ticker_or_name,
+    get_market_data,
+    get_news_signals,
+    get_social_signals,
+    get_extended_social,
+)
 
-load_dotenv()
 
+def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
+    """Scatter of num_comments vs sentiment. High comments + negative sentiment = heated debate."""
+    if social.empty:
+        return None
 
-def get_db_connection():
-    """Establish connection to PostgreSQL RDS database."""
-    try:
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            dbname=os.getenv("DB_NAME"),
-            sslmode="require"
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
+        .encode(x="x:Q")
+    )
+
+    scatter = (
+        alt.Chart(social)
+        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
+        .encode(
+            x=alt.X("sentiment_score:Q", title="Sentiment Score",
+                    scale=alt.Scale(domain=[-1.2, 1.2])),
+            y=alt.Y("num_comments:Q", title="Comments"),
+            color=alt.Color("relevance_score:Q", scale=alt.Scale(
+                scheme="viridis"), title="Relevance"),
+            size=alt.Size("ups:Q", scale=alt.Scale(
+                range=[40, 600]), title="Upvotes"),
+            tooltip=[
+                "title:N",
+                alt.Tooltip("sentiment_score:Q", format=".2f"),
+                "num_comments:Q",
+                "ups:Q",
+                alt.Tooltip("relevance_score:Q", format=".2f"),
+            ],
         )
-    except psycopg2.DatabaseError as err:
-        st.error("Failed to connect to database. Check environment variables.")
-        raise
+    )
 
-
-def get_stock_by_ticker_or_name(search_term):
-    """Search for stock by ticker or name."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    search_lower = search_term.lower()
-
-    cursor.execute("""
-        SELECT stock_id, ticker, stock_name FROM stock
-        WHERE LOWER(ticker) = %s OR LOWER(stock_name) LIKE %s
-        LIMIT 1
-    """, (search_lower, f"%{search_lower}%"))
-
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return result
-
-
-def get_market_data(stock_id):
-    """Get latest market data and historical trend."""
-    conn = get_db_connection()
-
-    latest = pd.read_sql_query("""
-        SELECT close, open, high, low, volume, latest_time FROM alpaca_live
-        WHERE stock_id = %s
-        ORDER BY latest_time DESC LIMIT 1
-    """, conn, params=(stock_id,))
-
-    history = pd.read_sql_query("""
-        SELECT bar_date, open, high, low, close, volume FROM alpaca_history
-        WHERE stock_id = %s
-        ORDER BY bar_date DESC LIMIT 30
-    """, conn, params=(stock_id,))
-
-    conn.close()
-    return latest, history
-
-
-def get_news_signals(stock_id):
-    """Get RSS news articles with sentiment analysis."""
-    conn = get_db_connection()
-    news = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rss.title, rss.summary, rss.published_date, rss.source
-        FROM rss_analysis ra
-        JOIN rss_article rss ON ra.story_id = rss.story_id
-        WHERE ra.stock_id = %s
-        ORDER BY rss.published_date DESC LIMIT 20
-    """, conn, params=(stock_id,))
-    conn.close()
-    return news
-
-
-def get_social_signals(stock_id):
-    """Get Reddit posts with sentiment analysis."""
-    conn = get_db_connection()
-    social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rp.title, rp.score, rp.num_comments, rp.created_at, rp.url
-        FROM reddit_analysis ra
-        JOIN reddit_post rp ON ra.story_id = rp.post_id
-        WHERE ra.stock_id = %s
-        ORDER BY rp.created_at DESC LIMIT 20
-    """, conn, params=(stock_id,))
-    conn.close()
-    return social
-
-
-def get_extended_social(stock_id: int) -> pd.DataFrame:
-    """Get Reddit posts with full engagement data (ups, contents) for chart rendering."""
-    conn = get_db_connection()
-    social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
-               rp.post_id, rp.title, rp.contents, rp.score, rp.ups,
-               rp.upvote_ratio, rp.num_comments, rp.created_at
-        FROM reddit_analysis ra
-        JOIN reddit_post rp ON ra.story_id = rp.post_id
-        WHERE ra.stock_id = %s
-        ORDER BY rp.created_at DESC LIMIT 200
-    """, conn, params=(stock_id,))
-    conn.close()
-    return social
+    return (zero_rule + scatter).properties
 
 
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> alt.LayerChart | None:
@@ -122,7 +59,7 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
         history[["bar_date", "close"]], left_on="date", right_on="bar_date", how="inner"
     )
 
-    if social_merged.empty:
+    if history.empty or social.empty:
         return None, None
 
     selection = alt.selection_point(fields=["post_id"], name="convergence_sel")
@@ -154,6 +91,7 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
                 "title:N",
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
                 alt.Tooltip("relevance_score:Q", format=".2f"),
+                "confidence:N",
             ],
         )
         .add_params(selection)
@@ -263,6 +201,7 @@ def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | Non
                 "ups:Q",
                 "num_comments:Q",
                 alt.Tooltip("relevance_score:Q", format=".2f"),
+                "confidence:N",
             ],
         )
     )
@@ -294,6 +233,7 @@ def build_news_horizon_chart(news: pd.DataFrame) -> alt.Chart | None:
                 alt.Tooltip("relevance_score:Q", format=".2f"),
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
                 "published_date:T",
+                "confidence:N",
             ],
         )
         .properties(height=chart_height)
@@ -340,7 +280,6 @@ def dashboard():
         if not search_input:
             st.warning("Please enter a stock ticker or company name.")
             return
-
         stock_result = get_stock_by_ticker_or_name(search_input)
 
         if not stock_result:
@@ -377,7 +316,8 @@ def dashboard():
                     price), f"{change:+.2f}")
             with col2:
                 st.metric("Today's Range",
-                          f"{format_price(low)} - {format_price(high)}")
+                          f"{format_price(low)} - {format_price(high)}",
+                          delta=f"{format_price(high - low)}")
             with col3:
                 st.metric("Volume", f"{volume/1e6:.1f}M" if volume else "N/A")
             with col4:
@@ -442,13 +382,21 @@ def dashboard():
             for _, row in news.head(5).iterrows():
                 s_score = row["sentiment_score"]
                 color = "green" if s_score > 0.2 else "red" if s_score < -0.2 else "gray"
+                confidence = row.get("confidence", "Unknown")
+                confidence_emoji = {"High": "✅", "Medium": "⚠️",
+                                    "Low": "❌", "Unknown": "❓"}.get(confidence, "❓")
 
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
+<<<<<<< HEAD
+                    c1.caption(f"Rel: {row['relevance_score']:.2f}")
+                    c1.caption(f"{confidence_emoji} Confidence: {confidence}")
+=======
                     confidence = row.get("confidence", "—")
                     c1.caption(
                         f"Rel: {row['relevance_score']:.2f} | {confidence}")
+>>>>>>> e7d1701 (test)
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(
@@ -468,8 +416,10 @@ def dashboard():
             st.info("No Reddit discussions found for this stock yet.")
         else:
             sentiment_avg = social["sentiment_score"].mean()
+            engagement_velocity = social["created_at"].diff(
+            ).dt.total_seconds().mean()
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 sentiment_label, _ = classify_sentiment(sentiment_avg)
                 st.metric("Reddit Sentiment", sentiment_label,
@@ -479,6 +429,9 @@ def dashboard():
                 st.metric("Total Comments", f"{engagement:,}")
             with col3:
                 st.metric("Top Posts Tracked", len(social))
+            with col4:
+                st.metric("Engagement Velocity",
+                          f"{engagement_velocity:.2f} sec/post")
 
             # Social summary
             positive_count = (social["sentiment_score"] > 0.5).sum()
@@ -492,28 +445,59 @@ def dashboard():
                 st.success(summary) if positive_count > negative_count else st.warning(
                     summary)
 
+            # Sentiment drivers
+            st.subheader("Sentiment Drivers")
+            top_keywords = social["title"].str.split(
+                expand=True).stack().value_counts().head(10)
+            st.write("Top Keywords:")
+            st.write(top_keywords)
+
             # Recent posts
             st.subheader("Top Discussions")
             for idx, row in social.head(5).iterrows():
                 sentiment_label, _ = classify_sentiment(row["sentiment_score"])
+                confidence = row.get("confidence", "Unknown")
+                confidence_emoji = {"High": "✅", "Medium": "⚠️",
+                                    "Low": "❌", "Unknown": "❓"}.get(confidence, "❓")
                 with st.expander(
                     f"{sentiment_label} — {row['title'][:60]}... ({row['score']} upvotes)"
                 ):
-                    st.caption(
-                        f"Posted: {row['created_at']}, {row['num_comments']} comments")
-                    if row["analysis"]:
-                        st.markdown(
-                            f"**Community Take:** {row['analysis'][:200]}...")
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.caption(
+                            f"Posted: {row['created_at']}, {row['num_comments']} comments")
+                    with col_b:
+                        st.caption(
+                            f"{confidence_emoji} Confidence: {confidence}")
+            # Enhanced visualization
+            st.subheader("Engagement vs. Sentiment")
+            st.caption(
+                "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
+            scatter_chart = build_engagement_scatter_chart(social)
+            if scatter_chart is None:
+                st.info("No Reddit engagement data available.")
+            else:
+                st.altair_chart(scatter_chart, use_container_width=True)
+                st.caption(
+                    "Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
-        st.divider()
+            st.subheader("Sentiment Heatmap")
+            heatmap = (
+                alt.Chart(social)
+                .mark_rect()
+                .encode(
+                    x=alt.X("created_at:T", title="Date"),
+                    y=alt.Y("sentiment_score:Q", title="Sentiment Score"),
+                    color=alt.Color("relevance_score:Q", scale=alt.Scale(
+                        scheme="viridis"), title="Relevance"),
+                    tooltip=["title:N", "sentiment_score:Q",
+                             "relevance_score:Q", "confidence:N"]
+                )
+            )
+            st.altair_chart(heatmap, use_container_width=True)
 
-        # --- SIGNAL CONVERGENCE HEADER (PULSE CHECK) ---
-        st.subheader(f"Pulse Check: {ticker}")
-        st.caption("Institutional vs. Retail Sentiment Alignment")
-
-        # news = get_news_signals(stock_id)
-        # social = get_social_signals(stock_id)
-
+            st.caption(
+                "Heatmap shows sentiment over time with relevance as intensity. Hover to see confidence level.")
         news_avg = news["sentiment_score"].mean() if not news.empty else 0
         social_avg = social["sentiment_score"].mean(
         ) if not social.empty else 0
@@ -521,10 +505,10 @@ def dashboard():
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Institutional (News)",
+            st.metric("News",
                       f"{news_avg:+.2f}", delta_color="normal")
         with col2:
-            st.metric("Retail (Reddit)",
+            st.metric("Reddit",
                       f"{social_avg:+.2f}", delta_color="normal")
         with col3:
             div_label = "Aligned" if abs(divergence) < 0.3 else "Diverging"
@@ -544,10 +528,12 @@ def dashboard():
         st.caption(
             "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
-        va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
+        va_tab1, va_tab2, va_tab3, va_tab4, va_tab5, va_tab6 = st.tabs([
             "📌 Signal Convergence",
             "📈 Sentiment Momentum",
+            "📊 Signal vs Price",
             "💥 Engagement Matrix",
+            "💬 Comments vs Sentiment",
             "📰 News Horizon",
         ])
 
@@ -598,7 +584,7 @@ def dashboard():
             st.subheader("Engagement vs. Sentiment")
             st.caption(
                 "Each point is a Reddit post. High upvotes + negative sentiment (bottom-left) = potential retail panic signal.")
-            scatter_chart = build_engagement_scatter_chart(extended_social)
+            scatter_chart = build_engagement_scatter_chart(social)
             if scatter_chart is None:
                 st.info("No Reddit engagement data available.")
             else:
@@ -615,6 +601,16 @@ def dashboard():
                 st.info("No news data available to render this chart.")
             else:
                 st.altair_chart(horizon_chart, use_container_width=True)
+
+        with va_tab5:
+            st.subheader("Comments vs. Sentiment")
+            st.caption(
+                "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
+            comments_chart = build_comments_vs_sentiment_chart(extended_social)
+            if comments_chart is None:
+                st.info("No Reddit data available.")
+            else:
+                st.altair_chart(comments_chart, use_container_width=True)
 
         st.divider()
 

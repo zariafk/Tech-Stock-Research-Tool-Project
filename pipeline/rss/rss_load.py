@@ -113,7 +113,7 @@ def load(df: pd.DataFrame) -> int:
                             stock_id,
                             row.get("sentiment"),
                             row.get("relevance_score"),
-                            row.get("confidence"),
+                            row.get("confidence", 'Unknown'),
                             row.get("analysis"),
                         ),
                     )

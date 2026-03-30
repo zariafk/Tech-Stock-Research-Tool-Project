@@ -119,6 +119,7 @@ def prepare_for_rag(df: pd.DataFrame) -> list[dict]:
                 "url": row["url"],
                 "relevance_score": row.get("relevance_score"),
                 "sentiment": row.get("sentiment"),
+                "confidence": row.get("confidence"),
             }
         }
         documents.append(doc)

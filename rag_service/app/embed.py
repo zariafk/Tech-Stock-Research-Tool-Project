@@ -1,15 +1,20 @@
-"""
-This module contains functions for generating embeddings for documents 
-using the OpenAI API.
-"""
+import os
+import json
+import boto3
 
 from openai import OpenAI
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
+
+
+secret_name = os.getenv("SECRET_NAME")
+secret_values = get_secret(secret_name)
+
+client = OpenAI(api_key=secret_values["OPENAI_API_KEY"])
 
 
 def get_embeddings(texts: list) -> list:

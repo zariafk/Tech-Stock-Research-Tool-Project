@@ -10,6 +10,8 @@ from alpaca_load import load_all_to_rds
 from top_100_tech_companies import tech_universe
 from logger import logger
 
+from rag_ingest_invoke import invoke_rag_ingest
+
 HISTORY_START_DATE = "2024-01-01"
 
 
@@ -74,6 +76,18 @@ def load(cleaned_data: dict[str, pd.DataFrame]) -> dict[str, int]:
         logger.exception("Pipeline failed at RDS load: %s", error)
         raise
 
+def invoke_rag(extracted: list[dict]) -> None:
+
+    rag_data = extracted["rag_dict"]["alpaca_history"] + extracted["rag_dict"]["alpaca_live"]
+    logger.info("Total Alpaca RAG records: %d", len(rag_data))
+
+    batch_size = 20
+    logger.info("Total Alpaca RAG records: %d", len(rag_data))
+
+    for i in range(0, len(rag_data), batch_size):
+        batch = rag_data[i:i + batch_size]
+        logger.info("Sending RAG batch %d to %d", i, i + len(batch))
+        invoke_rag_ingest(source="alpaca", data=batch)
 
 def run_pipeline() -> dict:
     """Execute the full Alpaca ETL pipeline."""
@@ -84,6 +98,8 @@ def run_pipeline() -> dict:
                 len(symbols), start, end)
 
     extracted = extract(symbols, start, end)
+    invoke_rag(extracted)
+    logger.info("Finished invoking RAG ingest")
     cleaned = transform(extracted, symbols)
     load_result = load(cleaned)
 

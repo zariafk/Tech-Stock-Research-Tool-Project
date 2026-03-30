@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": {"status": "success", "symbols": 40, "date_range": {"start": "2024-01-01", "end": "2026-03-30"}, "extraction": {"history_raw": 22480, "live_raw": 40}, "cleaning": {"history_clean": 22480, "live_clean": 40}, "load": {"history_rows_inserted": 0, "live_rows_inserted": 40}}}

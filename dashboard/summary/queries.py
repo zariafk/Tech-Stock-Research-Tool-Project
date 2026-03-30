@@ -78,7 +78,7 @@ def get_news_signals(stock_id):
     """Fetch RSS news articles with sentiment and relevance scores."""
     conn = get_db_connection()
     news = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
+        SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
                rss.title, rss.summary, rss.published_date, rss.source
         FROM rss_analysis ra
         JOIN rss_article rss ON ra.story_id = rss.story_id
@@ -93,7 +93,7 @@ def get_social_signals(stock_id):
     """Fetch Reddit posts with sentiment and relevance scores."""
     conn = get_db_connection()
     social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
+        SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
                rp.title, rp.score, rp.num_comments, rp.created_at, rp.url
         FROM reddit_analysis ra
         JOIN reddit_post rp ON ra.story_id = rp.post_id
@@ -108,7 +108,7 @@ def get_extended_social(stock_id: int) -> pd.DataFrame:
     """Fetch Reddit posts with full engagement data for chart rendering (200 most recent)."""
     conn = get_db_connection()
     social = pd.read_sql_query("""
-        SELECT ra.sentiment_score, ra.relevance_score, ra.analysis,
+        SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
                rp.post_id, rp.title, rp.contents, rp.score, rp.ups,
                rp.upvote_ratio, rp.num_comments, rp.created_at
         FROM reddit_analysis ra

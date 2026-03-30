@@ -56,6 +56,7 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
                 "title:N",
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
                 alt.Tooltip("relevance_score:Q", format=".2f"),
+                "confidence:N",
             ],
         )
         .add_params(selection)
@@ -165,6 +166,7 @@ def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | Non
                 "ups:Q",
                 "num_comments:Q",
                 alt.Tooltip("relevance_score:Q", format=".2f"),
+                "confidence:N",
             ],
         )
     )
@@ -196,6 +198,7 @@ def build_news_horizon_chart(news: pd.DataFrame) -> alt.Chart | None:
                 alt.Tooltip("relevance_score:Q", format=".2f"),
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
                 "published_date:T",
+                "confidence:N",
             ],
         )
         .properties(height=chart_height)
@@ -344,14 +347,15 @@ def dashboard():
             for _, row in news.head(5).iterrows():
                 s_score = row["sentiment_score"]
                 color = "green" if s_score > 0.2 else "red" if s_score < -0.2 else "gray"
+                confidence = row.get("confidence", "Unknown")
+                confidence_emoji = {"High": "✅", "Medium": "⚠️",
+                                    "Low": "❌", "Unknown": "❓"}.get(confidence, "❓")
 
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
                     c1.caption(f"Rel: {row['relevance_score']:.2f}")
-                    confidence = row.get("confidence", "—")
-                    c1.caption(
-                        f"Rel: {row['relevance_score']:.2f} | {confidence}")
+                    c1.caption(f"{confidence_emoji} Confidence: {confidence}")
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(
@@ -411,15 +415,19 @@ def dashboard():
             st.subheader("Top Discussions")
             for idx, row in social.head(5).iterrows():
                 sentiment_label, _ = classify_sentiment(row["sentiment_score"])
+                confidence = row.get("confidence", "Unknown")
+                confidence_emoji = {"High": "✅", "Medium": "⚠️",
+                                    "Low": "❌", "Unknown": "❓"}.get(confidence, "❓")
                 with st.expander(
                     f"{sentiment_label} — {row['title'][:60]}... ({row['score']} upvotes)"
                 ):
-                    st.caption(
-                        f"Posted: {row['created_at']}, {row['num_comments']} comments")
-                    if row["analysis"]:
-                        st.markdown(
-                            f"**Community Take:** {row['analysis'][:200]}...")
-
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.caption(
+                            f"Posted: {row['created_at']}, {row['num_comments']} comments")
+                    with col_b:
+                        st.caption(
+                            f"{confidence_emoji} Confidence: {confidence}")
             # Enhanced visualization
             st.subheader("Engagement vs. Sentiment")
             st.caption(
@@ -442,23 +450,13 @@ def dashboard():
                     color=alt.Color("relevance_score:Q", scale=alt.Scale(
                         scheme="viridis"), title="Relevance"),
                     tooltip=["title:N", "sentiment_score:Q",
-                             "relevance_score:Q"]
+                             "relevance_score:Q", "confidence:N"]
                 )
             )
             st.altair_chart(heatmap, use_container_width=True)
 
             st.caption(
-                "Heatmap shows sentiment over time with relevance as intensity.")
-
-        st.divider()
-
-        # --- SIGNAL CONVERGENCE HEADER (PULSE CHECK) ---
-        st.subheader(f"Pulse Check: {ticker}")
-        st.caption("Institutional vs. Retail Sentiment Alignment")
-
-        # news = get_news_signals(stock_id)
-        # social = get_social_signals(stock_id)
-
+                "Heatmap shows sentiment over time with relevance as intensity. Hover to see confidence level.")
         news_avg = news["sentiment_score"].mean() if not news.empty else 0
         social_avg = social["sentiment_score"].mean(
         ) if not social.empty else 0

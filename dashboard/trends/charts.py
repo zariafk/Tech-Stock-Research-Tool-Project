@@ -129,3 +129,88 @@ def build_sentiment_lollipop_chart(df_combined: pd.DataFrame) -> alt.Chart:
     )
 
     return (combined_rule + combined_point).properties(height=260)
+
+
+# ---------------------------------------------------------------------------
+# Return vs Volatility charts
+# ---------------------------------------------------------------------------
+def build_zero_line() -> alt.Chart:
+    """Build the y=0 reference rule for the return vs volatility scatter."""
+    return (
+        alt.Chart(pd.DataFrame({"y_value": [0]}))
+        .mark_rule(strokeDash=[6, 6], color="#9CA3AF")
+        .encode(y="y_value:Q")
+    )
+
+
+def build_scatter_points(plot_df: pd.DataFrame, period_short_label: str, selected_ticker) -> alt.Chart:
+    """Build scatter points encoded with return, volatility, and colour by return."""
+    return (
+        alt.Chart(plot_df)
+        .mark_circle(stroke="white", strokeWidth=1)
+        .encode(
+            x=alt.X("volatility_pct:Q", title="%s Volatility (%%" %
+                    period_short_label + ")"),
+            y=alt.Y("return_pct:Q", title="%s Return (%%" %
+                    period_short_label + ")"),
+            color=alt.Color(
+                "return_pct:Q",
+                title="Return %",
+                scale=alt.Scale(scheme="redyellowgreen", domainMid=0),
+            ),
+            opacity=alt.condition(
+                selected_ticker, alt.value(1.0), alt.value(0.85)),
+            tooltip=[
+                alt.Tooltip("ticker:N", title="Ticker"),
+                alt.Tooltip("period:N", title="Period"),
+                alt.Tooltip("return_pct:Q", title="Return %", format=".2f"),
+                alt.Tooltip("volatility_pct:Q",
+                            title="Volatility %", format=".2f"),
+                alt.Tooltip("abs_return:Q",
+                            title="Absolute Return %", format=".2f"),
+            ],
+        )
+        .add_params(selected_ticker)
+    )
+
+
+def build_ticker_labels(plot_df: pd.DataFrame, selected_ticker) -> alt.Chart:
+    """Build text labels positioned beside each scatter point."""
+    return (
+        alt.Chart(plot_df)
+        .mark_text(align="left", baseline="middle", dx=8, dy=-6, fontSize=11, color="#E5E7EB")
+        .encode(
+            x="volatility_pct:Q",
+            y="return_pct:Q",
+            text="ticker:N",
+            opacity=alt.condition(
+                selected_ticker, alt.value(1.0), alt.value(0.95)),
+        )
+    )
+
+
+def apply_chart_styling(chart: alt.Chart, period_short_label: str) -> alt.Chart:
+    """Apply consistent dark-theme axis and title styling to the scatter chart."""
+    return (
+        chart
+        .properties(title="Return vs Volatility (%s)" % period_short_label, height=560)
+        .configure_view(strokeOpacity=0)
+        .configure_axis(labelColor="#E5E7EB", titleColor="#E5E7EB", gridColor="#253041")
+        .configure_legend(labelColor="#E5E7EB", titleColor="#E5E7EB")
+        .configure_title(color="#E5E7EB", fontSize=20)
+    )
+
+
+def create_return_volatility_chart(metrics_df: pd.DataFrame, period_short_label: str) -> alt.Chart:
+    """Compose the full return vs volatility scatter from sub-layers."""
+    if metrics_df.empty:
+        return alt.Chart(pd.DataFrame()).mark_circle()
+
+    plot_df = metrics_df.copy()
+    plot_df["abs_return"] = plot_df["return_pct"].abs()
+
+    selected_ticker = alt.selection_point(
+        fields=["ticker"], on="click", clear="dblclick")
+    combined = build_zero_line() + build_scatter_points(plot_df, period_short_label,
+                                                        selected_ticker) + build_ticker_labels(plot_df, selected_ticker)
+    return apply_chart_styling(combined, period_short_label)

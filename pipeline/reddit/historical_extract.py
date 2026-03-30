@@ -12,16 +12,24 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://arctic-shift.photon-reddit.com/api/posts/search"
 REQUEST_TIMEOUT = 30
+DEFAULT_MAX_POSTS = 10
 
 
 def fetch_day(
     subreddit: str,
     date: datetime,
     *,
-    limit: int = 100,
+    page_size: int = 100,
+    max_posts: int = DEFAULT_MAX_POSTS,
     retries: int = 3,
 ) -> list[dict]:
-    """Fetches all posts for a single subreddit on a single day."""
+    """Fetches posts for a single subreddit on a single day.
+
+    Retrieves all posts for the day, ranks them by engagement
+    (score + num_comments), and returns the top `max_posts`.
+    This ensures we keep the most relevant posts rather than
+    just the first ones chronologically.
+    """
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
 
@@ -29,35 +37,53 @@ def fetch_day(
         "subreddit": subreddit,
         "after": int(start.timestamp()),
         "before": int(end.timestamp()),
-        "limit": limit,
+        "limit": page_size,
     }
 
     all_posts = []
 
-    for attempt in range(retries):
-        response = requests.get(
-            BASE_URL, params=params, timeout=REQUEST_TIMEOUT
-        )
+    while True:
+        success = False
 
-        if response.ok:
-            data = response.json().get("data", [])
-            all_posts.extend(data)
+        for attempt in range(retries):
+            response = requests.get(
+                BASE_URL, params=params, timeout=REQUEST_TIMEOUT
+            )
 
-            # Arctic Shift paginates; stop when fewer results than limit
-            if len(data) < limit:
+            if response.ok:
+                data = response.json().get("data", [])
+                all_posts.extend(data)
+                success = True
                 break
 
-            # Use the last post's created_utc to paginate forward
-            params["after"] = data[-1]["created_utc"]
-            continue
+            if response.status_code == 429:
+                wait = int(
+                    response.headers.get("Retry-After", 5 * (attempt + 1))
+                )
+                logger.warning("Rate limited, waiting %s seconds", wait)
+                time.sleep(wait)
+            else:
+                logger.error("Request failed: %s", response.status_code)
+                break
 
-        if response.status_code == 429:
-            wait = int(response.headers.get("Retry-After", 5 * (attempt + 1)))
-            logger.warning("Rate limited, waiting %s seconds", wait)
-            time.sleep(wait)
-        else:
-            logger.error("Request failed: %s", response.status_code)
+        if not success or len(data) < page_size:
             break
+
+        # Paginate forward using the last post's timestamp
+        params["after"] = data[-1]["created_utc"]
+
+    # Rank by engagement and keep the top max_posts
+    if len(all_posts) > max_posts:
+        all_posts.sort(
+            key=lambda p: p.get("score", 0) + p.get("num_comments", 0),
+            reverse=True,
+        )
+        logger.info(
+            "r/%s %s: trimmed %d posts to top %d by engagement",
+            subreddit, date.strftime("%Y-%m-%d"),
+            len(all_posts), max_posts,
+        )
+        all_posts = all_posts[:max_posts]
 
     return all_posts
 
@@ -76,6 +102,7 @@ def extract_historical(
     *,
     start_date: datetime,
     end_date: datetime,
+    max_posts: int = DEFAULT_MAX_POSTS,
     delay: float = 1.0,
 ) -> list[dict]:
     """Extracts historical posts for all subreddits across a date range."""
@@ -89,10 +116,8 @@ def extract_historical(
                 subreddit, date.strftime("%Y-%m-%d"),
             )
 
-            posts = fetch_day(subreddit, date)
+            posts = fetch_day(subreddit, date, max_posts=max_posts)
 
-            # Wrap in the same {"data": ...} structure as the live extractor
-            # so transform_main can process both formats identically
             all_posts.extend({"data": post} for post in posts)
 
             time.sleep(delay)

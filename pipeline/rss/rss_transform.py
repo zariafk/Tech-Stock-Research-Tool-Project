@@ -23,6 +23,7 @@ REQUIRED_COLUMNS = [
     "source",
     "relevance_score",
     "sentiment",
+    "confidence",
     "analysis",
 ]
 

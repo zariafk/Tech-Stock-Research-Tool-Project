@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import hashlib
 import psycopg2
+import re
 from logger import logger
 from fallback_stock import tech_universe
 from rss_extract_live import RSS_FEEDS, extract_live
@@ -64,7 +65,7 @@ def get_ticker_companies_from_db() -> dict:
 
 TICKER_COMPANIES = get_ticker_companies_from_db()
 TECH_TICKERS = list(TICKER_COMPANIES.keys())
-MAX_WORKERS = 10  # Concurrent OpenAI threads to respect rate limits
+MAX_WORKERS = 20  # Concurrent OpenAI threads to respect rate limits
 
 
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
@@ -95,7 +96,7 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     Universe: {", ".join(tickers)}
     Input: "{entry['title']}" | "{entry['summary']}"
 
-    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
+    Task: Score Relevance (0-10), Sentiment (-1.0 to 1.0), and Confidence in your scoring.
 
     Relevance Rubric:
     - 10: Direct idiosyncratic event (Earnings, M&A).
@@ -103,18 +104,29 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     - 7: Indirect impact (Competitor/Sector news).
     - <7: Ignore.
 
-    Sentiment Rubric (Strictly use these values):
-    - 1.0: Transformational positive news.
-    - 0.5: Incremental/Standard positive news.
-    - 0.0: Neutral/Mixed news.
-    - -0.5: Incremental negative news.
-    - -1.0: Catastrophic negative news.
+    Sentiment Rubric (Score from -1.0 to 1.0 in 0.1 increments):
+    - +1.0: Transformational/Systemic positive (M&A, massive earnings beat).
+    - +0.7 to +0.9: Strong positive (Major product launch, key contract win).
+    - +0.3 to +0.6: Moderate positive (Positive analyst upgrade, steady growth).
+    - +0.1 to +0.2: Slight positive (Minor positive mention, general market lift).
+    - 0.0: Neutral, administrative, or purely factual noise.
+    - -0.1 to -0.2: Slight negative (Minor litigation, general market drag).
+    - -0.3 to -0.6: Moderate negative (Missed estimates, management turnover).
+    - -0.7 to -0.9: Strong negative (Regulatory investigation, product recall).
+    - -1.0: Catastrophic (Bankruptcy, fraud, massive data breach).
+
+    Confidence Scoring:
+    - High: Clear signal. Direct quotes, confirmed by multiple sources, or explicit event.
+    - Medium: Reasonable inference but some ambiguity. Analyst opinion or sector trend.
+    - Low: Speculative or based on rumor. Requires corroboration.
+    - Unknown: Insufficient information to determine confidence.
 
     Output Format (JSON list):
     [{{
       "t": "TICKER",
       "r": score,
       "s": score,
+      "c": "High|Medium|Low",
       "why": "one sentence justification"
     }}]
     """
@@ -129,9 +141,13 @@ def extract_keywords(entry: dict, tickers: list[str]) -> list[str]:
         if ticker not in TICKER_COMPANIES:
             continue
         company = TICKER_COMPANIES[ticker].lower()
-        if (ticker.lower() in text) or (company in text):
+        t_low = ticker.lower()
+        # if (ticker.lower() in text) or (company in text):
+        #     matches.append(ticker)
+        if re.search(rf'\b{t_low}\b', text) or (company in text):
             matches.append(ticker)
-
+    logger.info("%s articles matched tickers via keyword: %s, company: %s",
+                len(matches), matches, company)
     return matches
 
 
@@ -153,14 +169,22 @@ def parse_relevance_data(response: str) -> list[dict]:
 
         results = []
         for item in data:
-            # Filter for r >= 7 and only include tickers in our database
-            if item.get('r', 0) >= 7 and item.get('t') in TICKER_COMPANIES:
+            # DEBUG: Log all OpenAI scores before filtering
+            logger.debug(
+                f"OpenAI scored ticker {item.get('t')} with relevance {item.get('r')} (why: {item.get('why')})")
+
+            # Filter for r >= 6 and only include tickers in our database
+            if item.get('r', 0) >= 6 and item.get('t') in TICKER_COMPANIES:
                 results.append({
                     "ticker": item.get('t'),
                     "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
+                    "confidence": item.get('c', 'Unknown'),
                     "analysis": item.get('why')
                 })
+            elif item.get('t') in TICKER_COMPANIES:
+                logger.info(
+                    f"Filtered out {item.get('t')}: relevance {item.get('r')} < 6")
         return results
     except json.JSONDecodeError as e:
         logger.error(
@@ -273,7 +297,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
     columns = [
         'ticker', 'article_id', 'title', 'url',
         'summary', 'published_date', 'source',
-        'relevance_score', 'sentiment', 'analysis'
+        'relevance_score', 'sentiment', 'confidence', 'analysis'
     ]
 
     # Ensure all columns exist (even if some rows didn't get them)
@@ -339,7 +363,43 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    # For local testing, run analysis on live extraction
-    live = extract_live(RSS_FEEDS)
-    df = analysis(live)
-    print(df.head())
+    # Test confidence scoring on a few sample articles
+    test_articles = [
+        {
+            'title': 'Apple Reports Record Q4 Earnings Beat',
+            'summary': 'Apple beat earnings estimates by 15%, guidance strong',
+            'url': 'test_1',
+            'source': 'Bloomberg'
+        },
+        {
+            'title': 'Apple stock drops on mixed analyst commentary',
+            'summary': 'Some analysts downgrade, others maintain hold ratings',
+            'url': 'test_2',
+            'source': 'Reuters'
+        },
+        {
+            'title': 'Apple might launch new feature next year maybe',
+            'summary': 'Rumors suggest Apple could possibly announce something',
+            'url': 'test_3',
+            'source': 'MobileTech Blog'
+        },
+        {
+            'title': 'Sources: Apple developing new A-series processor architecture',
+            'summary': 'People familiar with Apple\'s plans suggest chip redesign underway',
+            'url': 'test_low',
+            'source': 'Tech Analyst Blog'
+        }
+    ]
+
+    print("Testing confidence scoring...\n")
+    for article in test_articles:
+        print(f"Testing: {article['title']}")
+        result = get_ticker_analysis(article, ['AAPL'])
+        if result:
+            for item in result:
+                print(f"  Sentiment: {item['sentiment']:.2f}")
+                print(f"  Confidence: {item['confidence']}")
+                print(f"  Analysis: {item['analysis']}")
+        else:
+            print("  No results")
+        print()

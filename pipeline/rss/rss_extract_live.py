@@ -14,7 +14,8 @@ from rss_load import get_connection
 
 RSS_FEEDS = {
     'techcrunch': 'https://techcrunch.com/feed/',
-    'hackernews': 'https://hnrss.org/frontpage'
+    'hackernews': 'https://hnrss.org/frontpage',
+    'theverge': 'https://www.theverge.com/rss/index.xml',
 }
 
 
@@ -42,8 +43,12 @@ def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
     """Fetch RSS feed."""
     logger.info('LIVE: Fetching RSS: %s', url)
 
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
     try:
-        response = requests.get(url, verify=False, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
     except requests.exceptions.Timeout as e:
         logger.error('LIVE: Connection timeout for %s: %s', url, e)
         return None

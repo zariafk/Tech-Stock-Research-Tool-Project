@@ -4,8 +4,7 @@
 DROP TABLE IF EXISTS reddit_analysis CASCADE;
 DROP TABLE IF EXISTS rss_analysis CASCADE;
 DROP TABLE IF EXISTS reddit_post CASCADE;
-DROP TABLE IF EXISTS subreddit CASCADE;
-DROP TABLE IF EXISTS rss_article CASCADE;
+DROP TABLE IF EXISTS subreddit CASCADE; 
 DROP TABLE IF EXISTS alpaca_history CASCADE;
 DROP TABLE IF EXISTS alpaca_live CASCADE;
 DROP TABLE IF EXISTS stock CASCADE;
@@ -56,6 +55,7 @@ CREATE TABLE IF NOT EXISTS rss_analysis (
     stock_id         INT NOT NULL REFERENCES stock(stock_id),
     sentiment_score  FLOAT,
     relevance_score  FLOAT,
+    confidence       VARCHAR(10) DEFAULT 'Unknown' CHECK(confidence IN ('High', 'Medium', 'Low', 'Unknown')),
     analysis         TEXT,
     PRIMARY KEY (story_id, stock_id)
 );
@@ -66,11 +66,12 @@ CREATE TABLE IF NOT EXISTS reddit_analysis (
     stock_id         INT NOT NULL REFERENCES stock(stock_id),
     sentiment_score  FLOAT,
     relevance_score  FLOAT,
+    confidence       VARCHAR(10) DEFAULT 'Unknown' CHECK(confidence IN ('High', 'Medium', 'Low', 'Unknown')),
     analysis         TEXT,
     PRIMARY KEY (story_id, stock_id)
 );
 
--- Alpaca live snapshot (latest quote per stock)
+-- Alpaca market data: live and historical bars
 CREATE TABLE IF NOT EXISTS alpaca_live (
     live_bar_id    SERIAL PRIMARY KEY,
     stock_id       INT NOT NULL REFERENCES stock(stock_id),

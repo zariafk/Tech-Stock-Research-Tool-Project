@@ -24,18 +24,8 @@ def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
 
 
 def get_connection():
-    """Connect to RDS PostgreSQL. Uses env vars for local dev, Secrets Manager for prod."""
-    if os.environ.get("DB_HOST"):
-        return psycopg2.connect(
-            host=os.environ["DB_HOST"],
-            port=os.environ.get("DB_PORT", 5432),
-            dbname=os.environ["DB_NAME"],
-            user=os.environ["DB_USER"],
-            password=os.environ["DB_PASSWORD"],
-        )
-
-    # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    """Connect to RDS PostgreSQL. Uses Secrets Manager for prod."""
+    secret = get_secret("c22-trade-research-tool-secrets")
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),
@@ -110,21 +100,41 @@ def load(df: pd.DataFrame) -> int:
 
                 story_id = result[0]
 
-                # Insert into rss_analysis
-                cur.execute(
-                    """
-                    INSERT INTO rss_analysis
-                        (story_id, stock_id, sentiment_score, relevance_score, analysis)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (
-                        story_id,
-                        stock_id,
-                        row.get("sentiment"),
-                        row.get("relevance_score"),
-                        row.get("analysis"),
-                    ),
-                )
+                # Insert into rss_analysis (with fallback if confidence column missing)
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO rss_analysis
+                            (story_id, stock_id, sentiment_score, relevance_score, confidence, analysis)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            story_id,
+                            stock_id,
+                            row.get("sentiment"),
+                            row.get("relevance_score"),
+                            row.get("confidence"),
+                            row.get("analysis"),
+                        ),
+                    )
+                except psycopg2.errors.UndefinedColumn:
+                    # Fallback for tables without confidence column
+                    logger.warning(
+                        "confidence column missing from rss_analysis—inserting without it")
+                    cur.execute(
+                        """
+                        INSERT INTO rss_analysis
+                            (story_id, stock_id, sentiment_score, relevance_score, analysis)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            story_id,
+                            stock_id,
+                            row.get("sentiment"),
+                            row.get("relevance_score"),
+                            row.get("analysis"),
+                        ),
+                    )
                 total_net_new += 1
 
         conn.commit()

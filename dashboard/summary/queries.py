@@ -116,3 +116,16 @@ def get_extended_social(stock_id: int) -> pd.DataFrame:
     """, conn, params=(stock_id,))
     conn.close()
     return social
+
+
+def get_full_market_history(stock_id: int) -> pd.DataFrame:
+    """Fetch up to 365 days of price history for technical indicator computation."""
+    conn = get_db_connection()
+    history = pd.read_sql_query("""
+        SELECT bar_date, open, high, low, close, volume, trade_count, vwap
+        FROM alpaca_history
+        WHERE stock_id = %s
+        ORDER BY bar_date ASC LIMIT 365
+    """, conn, params=(stock_id,))
+    conn.close()
+    return history

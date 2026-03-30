@@ -96,7 +96,7 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     Universe: {", ".join(tickers)}
     Input: "{entry['title']}" | "{entry['summary']}"
 
-    Task: Score Relevance (0-10) and Sentiment (-1.0 to 1.0).
+    Task: Score Relevance (0-10), Sentiment (-1.0 to 1.0), and Confidence in your scoring.
 
     Relevance Rubric:
     - 10: Direct idiosyncratic event (Earnings, M&A).
@@ -115,11 +115,17 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     - -0.7 to -0.9: Strong negative (Regulatory investigation, product recall).
     - -1.0: Catastrophic (Bankruptcy, fraud, massive data breach).
 
+    Confidence Scoring:
+    - High: Clear signal. Direct quotes, confirmed by multiple sources, or explicit event.
+    - Medium: Reasonable inference but some ambiguity. Analyst opinion or sector trend.
+    - Low: Speculative or based on rumor. Requires corroboration.
+
     Output Format (JSON list):
     [{{
       "t": "TICKER",
       "r": score,
       "s": score,
+      "c": "High|Medium|Low",
       "why": "one sentence justification"
     }}]
     """
@@ -167,6 +173,7 @@ def parse_relevance_data(response: str) -> list[dict]:
                     "ticker": item.get('t'),
                     "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
+                    "confidence": item.get('c', 'Medium'),
                     "analysis": item.get('why')
                 })
         return results
@@ -281,7 +288,7 @@ def create_dataframe(articles: list) -> pd.DataFrame:
     columns = [
         'ticker', 'article_id', 'title', 'url',
         'summary', 'published_date', 'source',
-        'relevance_score', 'sentiment', 'analysis'
+        'relevance_score', 'sentiment', 'confidence', 'analysis'
     ]
 
     # Ensure all columns exist (even if some rows didn't get them)
@@ -347,7 +354,43 @@ def analysis(articles: list[dict], tickers: list[str] = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    # For local testing, run analysis on live extraction
-    live = extract_live(RSS_FEEDS)
-    df = analysis(live)
-    print(df.head())
+    # Test confidence scoring on a few sample articles
+    test_articles = [
+        {
+            'title': 'Apple Reports Record Q4 Earnings Beat',
+            'summary': 'Apple beat earnings estimates by 15%, guidance strong',
+            'url': 'test_1',
+            'source': 'Bloomberg'
+        },
+        {
+            'title': 'Apple stock drops on mixed analyst commentary',
+            'summary': 'Some analysts downgrade, others maintain hold ratings',
+            'url': 'test_2',
+            'source': 'Reuters'
+        },
+        {
+            'title': 'Apple might launch new feature next year maybe',
+            'summary': 'Rumors suggest Apple could possibly announce something',
+            'url': 'test_3',
+            'source': 'MobileTech Blog'
+        },
+        {
+            'title': 'Sources: Apple developing new A-series processor architecture',
+            'summary': 'People familiar with Apple\'s plans suggest chip redesign underway',
+            'url': 'test_low',
+            'source': 'Tech Analyst Blog'
+        }
+    ]
+
+    print("Testing confidence scoring...\n")
+    for article in test_articles:
+        print(f"Testing: {article['title']}")
+        result = get_ticker_analysis(article, ['AAPL'])
+        if result:
+            for item in result:
+                print(f"  Sentiment: {item['sentiment']:.2f}")
+                print(f"  Confidence: {item['confidence']}")
+                print(f"  Analysis: {item['analysis']}")
+        else:
+            print("  No results")
+        print()

@@ -104,14 +104,15 @@ def load(df: pd.DataFrame) -> int:
                 cur.execute(
                     """
                     INSERT INTO rss_analysis
-                        (story_id, stock_id, sentiment_score, relevance_score, analysis)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (story_id, stock_id, sentiment_score, relevance_score, confidence, analysis)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         story_id,
                         stock_id,
                         row.get("sentiment"),
                         row.get("relevance_score"),
+                        row.get("confidence", "Medium"),
                         row.get("analysis"),
                     ),
                 )

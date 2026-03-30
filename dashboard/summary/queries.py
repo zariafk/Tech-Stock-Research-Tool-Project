@@ -3,10 +3,8 @@ import json
 
 import psycopg2
 import pandas as pd
-from dotenv import load_dotenv
 import boto3
 
-load_dotenv()
 
 SECRETS_REPO = "c22-trade-research-tool-secrets"
 

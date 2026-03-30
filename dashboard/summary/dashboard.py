@@ -10,6 +10,41 @@ from queries import (
 )
 
 
+def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
+    """Scatter of num_comments vs sentiment. High comments + negative sentiment = heated debate."""
+    if social.empty:
+        return None
+
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
+        .encode(x="x:Q")
+    )
+
+    scatter = (
+        alt.Chart(social)
+        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
+        .encode(
+            x=alt.X("sentiment_score:Q", title="Sentiment Score",
+                    scale=alt.Scale(domain=[-1.2, 1.2])),
+            y=alt.Y("num_comments:Q", title="Comments"),
+            color=alt.Color("relevance_score:Q", scale=alt.Scale(
+                scheme="viridis"), title="Relevance"),
+            size=alt.Size("ups:Q", scale=alt.Scale(
+                range=[40, 600]), title="Upvotes"),
+            tooltip=[
+                "title:N",
+                alt.Tooltip("sentiment_score:Q", format=".2f"),
+                "num_comments:Q",
+                "ups:Q",
+                alt.Tooltip("relevance_score:Q", format=".2f"),
+            ],
+        )
+    )
+
+    return (zero_rule + scatter).properties
+
+
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> alt.LayerChart | None:
     """Layer price line with Reddit sentiment dots. Click a dot to surface the post below."""
     if history.empty or social.empty:
@@ -24,7 +59,7 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
         history[["bar_date", "close"]], left_on="date", right_on="bar_date", how="inner"
     )
 
-    if social_merged.empty:
+    if history.empty or social.empty:
         return None, None
 
     selection = alt.selection_point(fields=["post_id"], name="convergence_sel")
@@ -354,8 +389,14 @@ def dashboard():
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 4])
                     c1.markdown(f"### :{color}[{s_score:+.1f}]")
+<<<<<<< HEAD
                     c1.caption(f"Rel: {row['relevance_score']:.2f}")
                     c1.caption(f"{confidence_emoji} Confidence: {confidence}")
+=======
+                    confidence = row.get("confidence", "—")
+                    c1.caption(
+                        f"Rel: {row['relevance_score']:.2f} | {confidence}")
+>>>>>>> e7d1701 (test)
 
                     c2.markdown(f"**{row['title']}**")
                     c2.markdown(
@@ -487,10 +528,12 @@ def dashboard():
         st.caption(
             "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
-        va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
+        va_tab1, va_tab2, va_tab3, va_tab4, va_tab5, va_tab6 = st.tabs([
             "📌 Signal Convergence",
             "📈 Sentiment Momentum",
+            "📊 Signal vs Price",
             "💥 Engagement Matrix",
+            "💬 Comments vs Sentiment",
             "📰 News Horizon",
         ])
 
@@ -558,6 +601,16 @@ def dashboard():
                 st.info("No news data available to render this chart.")
             else:
                 st.altair_chart(horizon_chart, use_container_width=True)
+
+        with va_tab5:
+            st.subheader("Comments vs. Sentiment")
+            st.caption(
+                "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
+            comments_chart = build_comments_vs_sentiment_chart(extended_social)
+            if comments_chart is None:
+                st.info("No Reddit data available.")
+            else:
+                st.altair_chart(comments_chart, use_container_width=True)
 
         st.divider()
 

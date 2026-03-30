@@ -215,7 +215,21 @@ with tab_market:
 
     # ── Chart 2: Relative volume vs trade count — stacked bar ────────────────
     with col_right:
-        st.markdown("#### Relative Volume vs Trade Count — Stacked")
+        chart2_title, chart2_info = st.columns([10, 1])
+        with chart2_title:
+            st.markdown("#### Relative Volume vs Trade Count — Stacked")
+        with chart2_info:
+            with st.popover("ℹ️"):
+                st.markdown(
+                    "**Relative Volume vs Trade Count**\n\n"
+                    "Compares two normalised metrics side-by-side for each ticker "
+                    "over the selected time period:\n\n"
+                    "- **Relative Volume** — average daily volume in the period "
+                    "divided by the all-time average. Values above 1 indicate "
+                    "above-average activity.\n"
+                    "- **Trade Count** — average number of individual trades per day.\n\n"
+                    "Both are scaled to 0–1 so they can be stacked on the same axis."
+                )
 
         # Normalise both metrics to 0–1 for stacking on same axis
         vol_max = avg_per["relative_volume"].max()
@@ -248,7 +262,19 @@ with tab_market:
 
     # ── Chart 4: Close price over time — multi-ticker ─────────────────────────
     with col_right:
-        st.markdown("#### Close Price Over Time")
+        chart4_title, chart4_info = st.columns([10, 1])
+        with chart4_title:
+            st.markdown("#### Close Price Over Time")
+        with chart4_info:
+            with st.popover("ℹ️"):
+                st.markdown(
+                    "**Close Price Over Time**\n\n"
+                    "Shows the daily closing price for each selected ticker across "
+                    "the chosen time range.\n\n"
+                    "- Use the **multiselect** above the chart to add or remove tickers.\n"
+                    "- **Click a ticker in the legend** to highlight it and fade the rest.\n"
+                    "- The chart is interactive — scroll to zoom, click-drag to pan."
+                )
 
         all_tickers = sorted(df_history["ticker"].unique().tolist())
         selected_tickers = st.multiselect(
@@ -286,7 +312,21 @@ with tab_market:
             st.altair_chart(line_chart, use_container_width=True)
 
     # ── Chart 5: Combined sentiment lollipop (avg across sources) ─────────────
-    st.markdown("#### Combined Avg Sentiment by Ticker")
+    chart5_title, chart5_info = st.columns([10, 1])
+    with chart5_title:
+        st.markdown("#### Combined Avg Sentiment by Ticker")
+    with chart5_info:
+        with st.popover("ℹ️"):
+            st.markdown(
+                "**Combined Avg Sentiment by Ticker**\n\n"
+                "Displays the average sentiment score per ticker, aggregated "
+                "across all sources (news articles and Reddit) within the selected "
+                "time period.\n\n"
+                "- Scores range from **-1** (very negative) to **+1** (very positive).\n"
+                "- 🟢 **Green** stems indicate a net positive sentiment.\n"
+                "- 🔴 **Red** stems indicate a net negative sentiment.\n"
+                "- Tickers are sorted from most positive to most negative."
+            )
 
     df_combined = (
         apply_time_filter(df_sentiment_raw.copy(), "published_at")

@@ -119,6 +119,7 @@ def format_ticker_prompt(entry: dict, tickers: list[str]) -> str:
     - High: Clear signal. Direct quotes, confirmed by multiple sources, or explicit event.
     - Medium: Reasonable inference but some ambiguity. Analyst opinion or sector trend.
     - Low: Speculative or based on rumor. Requires corroboration.
+    - Unknown: Insufficient information to determine confidence.
 
     Output Format (JSON list):
     [{{
@@ -145,7 +146,8 @@ def extract_keywords(entry: dict, tickers: list[str]) -> list[str]:
         #     matches.append(ticker)
         if re.search(rf'\b{t_low}\b', text) or (company in text):
             matches.append(ticker)
-
+    logger.info("%s articles matched tickers via keyword: %s, company: %s",
+                len(matches), matches, company)
     return matches
 
 
@@ -167,15 +169,22 @@ def parse_relevance_data(response: str) -> list[dict]:
 
         results = []
         for item in data:
-            # Filter for r >= 7 and only include tickers in our database
-            if item.get('r', 0) >= 7 and item.get('t') in TICKER_COMPANIES:
+            # DEBUG: Log all OpenAI scores before filtering
+            logger.debug(
+                f"OpenAI scored ticker {item.get('t')} with relevance {item.get('r')} (why: {item.get('why')})")
+
+            # Filter for r >= 6 and only include tickers in our database
+            if item.get('r', 0) >= 6 and item.get('t') in TICKER_COMPANIES:
                 results.append({
                     "ticker": item.get('t'),
                     "relevance_score": item.get('r'),
                     "sentiment": item.get('s'),
-                    "confidence": item.get('c', 'Medium'),
+                    "confidence": item.get('c', 'Unknown'),
                     "analysis": item.get('why')
                 })
+            elif item.get('t') in TICKER_COMPANIES:
+                logger.info(
+                    f"Filtered out {item.get('t')}: relevance {item.get('r')} < 6")
         return results
     except json.JSONDecodeError as e:
         logger.error(

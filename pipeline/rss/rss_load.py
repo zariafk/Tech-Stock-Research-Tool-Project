@@ -113,13 +113,14 @@ def load(df: pd.DataFrame) -> int:
                             stock_id,
                             row.get("sentiment"),
                             row.get("relevance_score"),
-                            row.get("confidence", "Medium"),
+                            row.get("confidence"),
                             row.get("analysis"),
                         ),
                     )
                 except psycopg2.errors.UndefinedColumn:
                     # Fallback for tables without confidence column
-                    logger.warning("confidence column missing from rss_analysis—inserting without it")
+                    logger.warning(
+                        "confidence column missing from rss_analysis—inserting without it")
                     cur.execute(
                         """
                         INSERT INTO rss_analysis

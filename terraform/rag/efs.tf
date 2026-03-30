@@ -8,28 +8,10 @@ resource "aws_efs_file_system" "chroma_efs" {
 }
 
 # Create EFS mount targets in each subnet
-resource "aws_efs_mount_target" "chroma_efs_mount_a" {
+resource "aws_efs_mount_target" "chroma_efs_mounts" {
     for_each = toset(var.subnet_ids)
     
     file_system_id  = aws_efs_file_system.chroma_efs.id
     subnet_id       = each.value
-    security_groups = [aws_security_group.chroma_sg.id]
-}
-
-# Create EFS mount targets for each subnet
-resource "aws_efs_mount_target" "chroma_efs_mount_b" {
-    for_each = toset(var.subnet_ids)
-    
-    file_system_id  = aws_efs_file_system.chroma_efs.id
-    subnet_id       = each.value
-    security_groups = [aws_security_group.chroma_sg.id]
-}
-
-# Create EFS mount targets for each subnet
-resource "aws_efs_mount_target" "chroma_efs_mount_c" {
-    for_each = toset(var.subnet_ids)
-    
-    file_system_id  = aws_efs_file_system.chroma_efs.id
-    subnet_id       = each.value
-    security_groups = [aws_security_group.chroma_sg.id]
+    security_groups = [aws_security_group.efs_sg.id]
 }

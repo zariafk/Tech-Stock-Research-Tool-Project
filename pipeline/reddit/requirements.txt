@@ -1,0 +1,6 @@
+requests
+pandas
+boto3
+pyarrow
+psycopg2-binary
+openai

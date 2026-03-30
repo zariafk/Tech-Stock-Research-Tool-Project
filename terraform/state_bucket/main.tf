@@ -1,7 +1,6 @@
 # 1. The S3 Bucket
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "c22-tsrt-terraform-state" 
-
+  bucket  = "c22-tsrt-terraform-state" 
   # Prevent accidental deletion of this bucket
   lifecycle {
     prevent_destroy = true

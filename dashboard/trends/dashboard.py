@@ -123,6 +123,24 @@ def dashboard():
 
     st.divider()
 
+    # ── Return vs Volatility ─────────────────────────────────────────────────────
+    try:
+        rv_df_raw = fetch_return_volatility_data(conn)
+    except Exception as e:
+        st.error(f"Failed to load return/volatility data: {e}")
+        return
+
+    rv_df = add_daily_returns(rv_df_raw)
+    period_short_label = get_period_short_label(time_label)
+    metrics_df = build_return_volatility_table(
+        rv_df, time_days, period_short_label)
+
+    if metrics_df.empty:
+        st.info(
+            "Not enough data to calculate return/volatility metrics for this period.")
+    else:
+        render_return_volatility_section(metrics_df, period_short_label)
+
     # ── Market Data ──────────────────────────────────────────────────────────────
 
     try:
@@ -244,21 +262,3 @@ def dashboard():
     combined_lollipop = build_sentiment_lollipop_chart(df_combined)
     st.altair_chart(combined_lollipop, use_container_width=True)
     st.divider()
-
-    # ── Return vs Volatility ─────────────────────────────────────────────────────
-    try:
-        rv_df_raw = fetch_return_volatility_data(conn)
-    except Exception as e:
-        st.error(f"Failed to load return/volatility data: {e}")
-        return
-
-    rv_df = add_daily_returns(rv_df_raw)
-    period_short_label = get_period_short_label(time_label)
-    metrics_df = build_return_volatility_table(
-        rv_df, time_days, period_short_label)
-
-    if metrics_df.empty:
-        st.info(
-            "Not enough data to calculate return/volatility metrics for this period.")
-    else:
-        render_return_volatility_section(metrics_df, period_short_label)

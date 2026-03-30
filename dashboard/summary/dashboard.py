@@ -4,13 +4,23 @@ dashboard.py
 Summary dashboard — stock deep-dive with market data, news, and social signals.
 """
 
+import json
+import os
+
+import boto3
+import pandas as pd
+import psycopg2
 import streamlit as st
+from dotenv import load_dotenv
+
 from .queries import (
-    get_stock_by_ticker_or_name,
-    get_market_data,
-    get_news_signals,
-    get_social_signals,
-    get_extended_social,
+    STOCK_SEARCH_QUERY,
+    MARKET_LATEST_QUERY,
+    MARKET_HISTORY_QUERY,
+    NEWS_SIGNALS_QUERY,
+    SOCIAL_SIGNALS_QUERY,
+    EXTENDED_SOCIAL_QUERY,
+    FULL_MARKET_HISTORY_QUERY,
 )
 from .helpers import (
     render_market_section,
@@ -20,7 +30,106 @@ from .helpers import (
     render_visual_analytics,
 )
 
+load_dotenv()
 
+SECRETS_REPO = "c22-trade-research-tool-secrets"
+
+
+# ---------------------------------------------------------------------------
+# Connection
+# ---------------------------------------------------------------------------
+def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
+    """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
+    client = boto3.client("secretsmanager", region_name=region)
+    response = client.get_secret_value(SecretId=secret_name)
+    return json.loads(response["SecretString"])
+
+
+def get_connection():
+    """Connect to RDS PostgreSQL. Uses env vars for local dev, Secrets Manager for prod."""
+    if os.environ.get("DB_HOST"):
+        return psycopg2.connect(
+            host=os.environ["DB_HOST"],
+            port=os.environ.get("DB_PORT", 5432),
+            dbname=os.environ["DB_NAME"],
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
+        )
+
+    secret = get_secret(SECRETS_REPO)
+    return psycopg2.connect(
+        host=secret["host"],
+        port=int(secret["port"]),
+        dbname=secret["dbname"],
+        user=secret["username"],
+        password=secret["password"],
+        sslmode="require",
+    )
+
+
+if "conn" not in st.session_state:
+    st.session_state.conn = None
+
+if st.session_state.conn is None:
+    try:
+        st.session_state.conn = get_connection()
+        st.sidebar.success("Connected to RDS ✓")
+    except Exception as e:
+        st.sidebar.error("Could not connect to database.")
+        st.sidebar.caption(str(e))
+
+conn = st.session_state.conn
+
+
+# ---------------------------------------------------------------------------
+# Cached queries (20-minute TTL)
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=1200, show_spinner="Searching for stock...")
+def fetch_stock_by_ticker_or_name(_conn, search_term: str) -> tuple | None:
+    """Search for stock by ticker or name. Returns (stock_id, ticker, stock_name) or None."""
+    search_lower = search_term.lower()
+    cursor = _conn.cursor()
+    cursor.execute(STOCK_SEARCH_QUERY, (search_lower, f"%{search_lower}%"))
+    result = cursor.fetchone()
+    cursor.close()
+    return result
+
+
+@st.cache_data(ttl=1200, show_spinner="Fetching market data...")
+def fetch_market_data(_conn, stock_id: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fetch latest market data and 30-day historical trend. Returns (latest_df, history_df)."""
+    latest = pd.read_sql(MARKET_LATEST_QUERY, _conn, params=(stock_id,))
+    history = pd.read_sql(MARKET_HISTORY_QUERY, _conn, params=(stock_id,))
+    return latest, history
+
+
+@st.cache_data(ttl=1200, show_spinner="Fetching news signals...")
+def fetch_news_signals(_conn, stock_id: int) -> pd.DataFrame:
+    """Fetch RSS news articles with sentiment and relevance scores."""
+    return pd.read_sql(NEWS_SIGNALS_QUERY, _conn, params=(stock_id,))
+
+
+@st.cache_data(ttl=1200, show_spinner="Fetching social signals...")
+def fetch_social_signals(_conn, stock_id: int) -> pd.DataFrame:
+    """Fetch Reddit posts with sentiment and relevance scores."""
+    return pd.read_sql(SOCIAL_SIGNALS_QUERY, _conn, params=(stock_id,))
+
+
+@st.cache_data(ttl=1200, show_spinner="Fetching extended social data...")
+def fetch_extended_social(_conn, stock_id: int) -> pd.DataFrame:
+    """Fetch Reddit posts with full engagement data for chart rendering (200 most recent)."""
+    return pd.read_sql(EXTENDED_SOCIAL_QUERY, _conn, params=(stock_id,))
+
+
+@st.cache_data(ttl=1200, show_spinner="Fetching full market history...")
+def fetch_full_market_history(_conn, stock_id: int) -> pd.DataFrame:
+    """Fetch up to 365 days of price history for technical indicator computation."""
+    return pd.read_sql(FULL_MARKET_HISTORY_QUERY, _conn, params=(stock_id,))
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""
     st.caption(
@@ -45,7 +154,7 @@ def dashboard():
         st.warning("Please enter a stock ticker or company name.")
         return
 
-    stock_result = get_stock_by_ticker_or_name(search_input)
+    stock_result = fetch_stock_by_ticker_or_name(conn, search_input)
     if not stock_result:
         st.error("Stock not found. Please check the ticker or company name.")
         return
@@ -53,10 +162,10 @@ def dashboard():
     stock_id, ticker, company_name = stock_result
     st.divider()
 
-    latest, history = get_market_data(stock_id)
-    news = get_news_signals(stock_id)
-    social = get_social_signals(stock_id)
-    extended_social = get_extended_social(stock_id)
+    latest, history = fetch_market_data(conn, stock_id)
+    news = fetch_news_signals(conn, stock_id)
+    social = fetch_social_signals(conn, stock_id)
+    extended_social = fetch_extended_social(conn, stock_id)
 
     st.header(f"Market Data — {ticker} ({company_name})")
     render_market_section(latest, history)

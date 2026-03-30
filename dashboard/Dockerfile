@@ -1,18 +1,17 @@
 FROM python:3.13-slim
 
+WORKDIR /app
+
 COPY requirements.txt .
 
 RUN pip3 install -r requirements.txt 
 
 COPY dashboard.py .
 
-COPY live/dashboard_graphs.py ./live/
-COPY live/dashboard_queries.py ./live/
-COPY live/live_dashboard.py ./live/
-
-COPY historical/dashboard_graphs.py ./historical/
-COPY historical/dashboard_queries.py ./historical/
-COPY historical/hist_dashboard.py ./historical/
+COPY live/ ./live/
+COPY historical/ ./historical/
+COPY summary/ ./summary/
+COPY trends/ ./trends/
 
 # listen on port 8501 for Streamlit
 EXPOSE 8501

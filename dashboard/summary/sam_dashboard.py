@@ -1,137 +1,88 @@
-"""Signal vs Price dual-axis time series chart."""
+"""Engagement vs Sentiment scatter chart."""
 
 import altair as alt
 import pandas as pd
-import yfinance as yf
 
 
-def get_price_data(
-    ticker: str,
-    start: str,
-    end: str,
-) -> pd.DataFrame:
-    """Fetches daily closing prices for a ticker."""
-    df = yf.download(ticker, start=start, end=end, progress=False)
-    df = df[["Close"]].reset_index()
-    df.columns = ["date", "close"]
-    df["date"] = pd.to_datetime(df["date"]).dt.date
-    return df
-
-
-def build_daily_sentiment(
-    reddit_analysis: pd.DataFrame,
+def create_engagement_sentiment_scatter(
     reddit_posts: pd.DataFrame,
+    subreddits: pd.DataFrame,
+    reddit_analysis: pd.DataFrame,
     stocks: pd.DataFrame,
-    ticker: str,
-) -> pd.DataFrame:
-    """Aggregates sentiment to a daily level for a single ticker."""
-    analysis = reddit_analysis.merge(stocks, on="stock_id", how="left")
-    analysis = analysis[analysis["ticker"] == ticker]
+) -> alt.Chart:
+    """Creates a scatter plot of engagement vs sentiment, coloured by subreddit.
 
-    analysis = analysis.merge(
-        reddit_posts[["post_id", "created_at", "ups"]],
-        left_on="story_id",
-        right_on="post_id",
+    Args:
+        reddit_posts: Columns include post_id, ups, num_comments, subreddit_id.
+        subreddits: Columns include subreddit_id, subreddit_name.
+        reddit_analysis: Columns include post_id, stock_id, sentiment_score,
+                         relevance_score.
+        stocks: Columns include stock_id, ticker.
+
+    Returns:
+        A layered Altair chart with num_comments on x-axis and
+        sentiment_score on y-axis, sized by ups, coloured by subreddit.
+    """
+    # Join analysis with stock tickers
+    analysis = reddit_analysis.merge(stocks, on="stock_id", how="left")
+
+    # Join posts with subreddit names
+    posts = reddit_posts.merge(subreddits, on="subreddit_id", how="left")
+
+    # Combine: one row per post-ticker pair with engagement + sentiment
+    df = analysis.merge(
+        posts[["post_id", "ups", "num_comments", "subreddit_name"]],
+        on="post_id",
         how="left",
     )
 
-    analysis["date"] = pd.to_datetime(analysis["created_at"]).dt.date
+    # Build tooltip showing post context
+    tooltip_fields = [
+        alt.Tooltip("ticker:N", title="Ticker"),
+        alt.Tooltip("subreddit_name:N", title="Subreddit"),
+        alt.Tooltip("sentiment_score:Q", title="Sentiment", format=".1f"),
+        alt.Tooltip("relevance_score:Q", title="Relevance"),
+        alt.Tooltip("ups:Q", title="Upvotes"),
+        alt.Tooltip("num_comments:Q", title="Comments"),
+    ]
 
-    # Weighted average: high-upvote posts count more
-    daily = (
-        analysis.groupby("date")
-        .apply(
-            lambda g: pd.Series({
-                "avg_sentiment": (
-                    (g["sentiment_score"] * g["ups"]).sum() / g["ups"].sum()
-                    if g["ups"].sum() > 0
-                    else g["sentiment_score"].mean()
-                ),
-                "post_count": len(g),
-            })
-        )
-        .reset_index()
-    )
-
-    return daily
-
-
-def create_signal_vs_price_chart(
-    reddit_analysis: pd.DataFrame,
-    reddit_posts: pd.DataFrame,
-    stocks: pd.DataFrame,
-    ticker: str,
-    start_date: str,
-    end_date: str,
-) -> alt.LayerChart:
-    """Creates a dual-axis chart comparing daily sentiment to stock price.
-
-    Args:
-        reddit_analysis: story_id, stock_id, sentiment_score, relevance_score.
-        reddit_posts: post_id, created_at, ups.
-        stocks: stock_id, ticker.
-        ticker: The stock ticker to plot (e.g. "NVDA").
-        start_date: ISO date string (e.g. "2024-01-01").
-        end_date: ISO date string (e.g. "2026-03-30").
-
-    Returns:
-        A layered Altair chart with price line and sentiment bars.
-    """
-    prices = get_price_data(ticker, start_date, end_date)
-    sentiment = build_daily_sentiment(
-        reddit_analysis, reddit_posts, stocks, ticker
-    )
-
-    # Merge on date so both series align
-    merged = prices.merge(sentiment, on="date", how="left")
-    merged["date"] = pd.to_datetime(merged["date"])
-
-    price_line = (
-        alt.Chart(merged)
-        .mark_line(color="#1f77b4")
+    scatter = (
+        alt.Chart(df)
+        .mark_circle(opacity=0.7)
         .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("close:Q", title="Close Price ($)"),
-            tooltip=[
-                alt.Tooltip("date:T", title="Date"),
-                alt.Tooltip("close:Q", title="Price", format="$.2f"),
-            ],
-        )
-    )
-
-    sentiment_bars = (
-        alt.Chart(merged.dropna(subset=["avg_sentiment"]))
-        .mark_bar(opacity=0.5, width=2)
-        .encode(
-            x="date:T",
+            x=alt.X(
+                "num_comments:Q",
+                title="Comments",
+                scale=alt.Scale(zero=False),
+            ),
             y=alt.Y(
-                "avg_sentiment:Q",
-                title="Avg Sentiment",
-                axis=alt.Axis(orient="right"),
+                "sentiment_score:Q",
+                title="Sentiment Score",
                 scale=alt.Scale(domain=[-1.0, 1.0]),
             ),
-            color=alt.condition(
-                alt.datum.avg_sentiment > 0,
-                alt.value("#2ca02c"),
-                alt.value("#d62728"),
+            size=alt.Size(
+                "ups:Q",
+                title="Upvotes",
+                scale=alt.Scale(range=[30, 500]),
             ),
-            tooltip=[
-                alt.Tooltip("date:T", title="Date"),
-                alt.Tooltip("avg_sentiment:Q",
-                            title="Sentiment", format=".2f"),
-                alt.Tooltip("post_count:Q", title="Posts"),
-            ],
+            color=alt.Color(
+                "subreddit_name:N",
+                title="Subreddit",
+            ),
+            tooltip=tooltip_fields,
         )
-    )
-
-    chart = (
-        alt.layer(price_line, sentiment_bars)
-        .resolve_scale(y="independent")
         .properties(
-            title=f"{ticker} — Price vs Reddit Sentiment",
+            title="Engagement vs Sentiment",
             width=700,
-            height=400,
+            height=450,
         )
     )
 
-    return chart
+    # Horizontal line at sentiment = 0 for reference
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(color="grey", strokeDash=[4, 4], opacity=0.5)
+        .encode(y="y:Q")
+    )
+
+    return scatter + zero_line

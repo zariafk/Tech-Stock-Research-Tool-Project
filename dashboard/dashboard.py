@@ -1,6 +1,7 @@
 import streamlit as st
 from trends.dashboard import dashboard as trends_dashboard
 from summary.dashboard import dashboard as summary_dashboard
+from chatbot import render_chatbot
 
 
 def dashboard():
@@ -23,6 +24,8 @@ def dashboard():
     # ---------------------------------------------------------------------------
     tab_market, tab_ticker, tab_chatbot = st.tabs(
         ["Market Data", "Company Specific", "Chatbot"])
+
+    render_chatbot()  # Render chatbot in the background so it's available across tabs
 
     # ── Tab 1: Market Data ──────────────────────────────────────────────────────────────
     with tab_market:

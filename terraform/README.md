@@ -50,56 +50,20 @@ Each module uses a unique state key under `stocksiphon/<module>/terraform.tfstat
 
 ---
 
-## How to Deploy
-
-Container images must be built and pushed to ECR before Terraform provisions the Lambda or ECS resources that reference them. The general flow for each module is:
-
-### 1. Build and push the Docker image (pipeline, rag, dashboard)
-
-```bash
-# Authenticate Docker with ECR
-aws ecr get-login-password --region eu-west-2 | \
-  docker login --username AWS --password-stdin \
-  129033205317.dkr.ecr.eu-west-2.amazonaws.com
-
-# Build the image (run from the relevant source folder)
-docker build -t <ecr-repo-name> .
-
-# Tag and push
-docker tag <ecr-repo-name>:latest \
-  129033205317.dkr.ecr.eu-west-2.amazonaws.com/<ecr-repo-name>:latest
-
-docker push \
-  129033205317.dkr.ecr.eu-west-2.amazonaws.com/<ecr-repo-name>:latest
-```
-
-ECR repository names follow the pattern `c22-stocksiphon-{rss,alpaca,reddit,rag-ingest,rag-query,dashboard}-{ecr,lambda}`.
-
-Each pipeline source folder (`pipeline/alpaca/`, `pipeline/rss/`, `pipeline/reddit/`, `rag_service/`, `dashboard/`) contains a `deploy_*.sh` script that wraps the build-tag-push steps above.
-
-### 2. Apply Terraform
-
-```bash
-cd terraform/<module>
-terraform init
-terraform plan
-terraform apply
-```
-
-### Recommended Deployment Order
-
-Deploy modules in this order to satisfy dependencies:
-
-1. `state_bucket/` — must exist first (run once, state is local)
-2. `secrets_repository/` — populate secret values in AWS console after apply
-3. `database/` — RDS must be up before pipelines write to it
-4. `rag/` — ChromaDB ECS service and Lambda functions
-5. `pipeline/` — Lambdas reference the RAG ingest Lambda ARN
-6. `dashboard/` — references the shared ECS cluster
-
----
-
 ## How to Run
+
+### Deployment order
+
+Modules must be applied in this order due to dependencies between them. Run `terraform init` then `terraform apply` for each module before moving to the next:
+
+1. `state_bucket/` — creates the S3 remote state bucket (state is local here only; run once)
+2. `secrets_repository/` — creates the Secrets Manager secret shell; populate values in AWS console before continuing
+3. `database/` — RDS must be running before any pipeline writes data
+4. `rag/` — provisions ECR repositories for the ingest and query images; the pipeline Lambda role references the RAG ingest Lambda ARN
+5. `pipeline/` — **this apply will fail** (see below)
+6. `dashboard/` — depends on the shared ECS cluster created by `rag/`
+
+> **Expected failure at `pipeline/`:** The pipeline Terraform creates the ECR repositories and then tries to reference Docker images in them. Because no images have been pushed yet, the Lambda creation will fail. **This is expected.** After the failure, push the Docker images for all three pipelines (RSS, Alpaca, Reddit) and the RAG ingest/query images to their ECR repositories, then run `terraform apply` in `pipeline/` again to complete the deployment.
 
 ### Initialise a module
 

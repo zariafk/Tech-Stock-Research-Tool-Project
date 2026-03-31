@@ -8,47 +8,47 @@ import pandas as pd
 import altair as alt
 
 
-def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """
-    Builds a scatter plot of comments vs sentiment with relevance as color.
+# def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
+#     """
+#     Builds a scatter plot of comments vs sentiment with relevance as color.
 
-    Args:
-        social (pd.DataFrame): Reddit data with sentiment, relevance, and engagement metrics.
+#     Args:
+#         social (pd.DataFrame): Reddit data with sentiment, relevance, and engagement metrics.
 
-    Returns:
-        alt.LayerChart | None: Altair chart object or None if data is empty.
-    """
-    if social.empty:
-        return None
+#     Returns:
+#         alt.LayerChart | None: Altair chart object or None if data is empty.
+#     """
+#     if social.empty:
+#         return None
 
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
-        .encode(x="x:Q")
-    )
+#     zero_rule = (
+#         alt.Chart(pd.DataFrame({"x": [0]}))
+#         .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
+#         .encode(x="x:Q")
+#     )
 
-    scatter = (
-        alt.Chart(social)
-        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
-        .encode(
-            x=alt.X("sentiment_score:Q", title="Sentiment Score",
-                    scale=alt.Scale(domain=[-1.2, 1.2])),
-            y=alt.Y("num_comments:Q", title="Comments"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="viridis"), title="Relevance"),
-            size=alt.Size("ups:Q", scale=alt.Scale(
-                range=[40, 600]), title="Upvotes"),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "num_comments:Q",
-                "ups:Q",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-            ],
-        )
-    )
+#     scatter = (
+#         alt.Chart(social)
+#         .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
+#         .encode(
+#             x=alt.X("sentiment_score:Q", title="Sentiment Score",
+#                     scale=alt.Scale(domain=[-1.2, 1.2])),
+#             y=alt.Y("num_comments:Q", title="Comments"),
+#             color=alt.Color("relevance_score:Q", scale=alt.Scale(
+#                 scheme="viridis"), title="Relevance"),
+#             size=alt.Size("ups:Q", scale=alt.Scale(
+#                 range=[40, 600]), title="Upvotes"),
+#             tooltip=[
+#                 "title:N",
+#                 alt.Tooltip("sentiment_score:Q", format=".2f"),
+#                 "num_comments:Q",
+#                 "ups:Q",
+#                 alt.Tooltip("relevance_score:Q", format=".2f"),
+#             ],
+#         )
+#     )
 
-    return (zero_rule + scatter)
+#     return (zero_rule + scatter)
 
 
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> tuple[alt.Chart, pd.DataFrame] | tuple[None, None]:
@@ -224,32 +224,127 @@ def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | Non
     return (zero_rule + scatter).properties(height=300)
 
 
-def build_news_horizon_chart(news: pd.DataFrame) -> alt.Chart | None:
-    """Builds a strip plot showing news coverage density by source over time."""
+# ---------------------------------------------------------------------------
+#  Classifying sentiment overview for each source
+# ---------------------------------------------------------------------------
+INDICATOR_POS_THRESHOLD = 0.1
+INDICATOR_NEG_THRESHOLD = -0.1
+MARKET_POS_THRESHOLD = 0.01
+MARKET_NEG_THRESHOLD = -0.01
+SIGNAL_DOMAIN = ["positive", "neutral", "negative"]
+SIGNAL_COLORS = ["#2ecc71", "#f39c12", "#e74c3c"]
+SIGNAL_SORT_ORDER = ["News", "Reddit", "Market"]
+INDICATOR_CIRCLE_SIZE = 2000
+INDICATOR_ROW_HEIGHT = 120
+
+
+def _classify_signal(score: float) -> str:
+    """Returns 'positive', 'neutral', or 'negative' for sentiment thresholds."""
+    if score > INDICATOR_POS_THRESHOLD:
+        return "positive"
+    if score < INDICATOR_NEG_THRESHOLD:
+        return "negative"
+    return "neutral"
+
+
+def _market_classify(change: float) -> str:
+    """Returns 'positive', 'neutral', or 'negative' using market-specific thresholds."""
+    if change > MARKET_POS_THRESHOLD:
+        return "positive"
+    if change < MARKET_NEG_THRESHOLD:
+        return "negative"
+    return "neutral"
+
+
+def _news_aggregate_score(news: pd.DataFrame) -> float:
+    """Returns relevance-weighted average news sentiment. Returns 0.0 if no data."""
     if news.empty:
-        return None
+        return 0.0
+    total_relevance = news["relevance_score"].sum()
+    if total_relevance == 0:
+        return 0.0
+    return (news["sentiment_score"] * news["relevance_score"]).sum() / total_relevance
 
-    news = news.copy()
-    news["published_date"] = pd.to_datetime(news["published_date"])
-    chart_height = max(200, news["source"].nunique() * 32)
 
-    return (
-        alt.Chart(news)
-        .mark_circle(size=90)
+def _reddit_aggregate_score(social: pd.DataFrame) -> float:
+    """Returns relevance-weighted average Reddit sentiment. Returns 0.0 if no data."""
+    if social.empty:
+        return 0.0
+    total_relevance = social["relevance_score"].sum()
+    if total_relevance == 0:
+        return 0.0
+    return (social["sentiment_score"] * social["relevance_score"]).sum() / total_relevance
+
+
+def _market_price_change(history: pd.DataFrame) -> float:
+    """Returns fractional price change from first to last close. Returns 0.0 if insufficient data."""
+    if history.empty or len(history) < 2:
+        return 0.0
+    sorted_history = history.sort_values("bar_date")
+    first_close = sorted_history["close"].iloc[0]
+    last_close = sorted_history["close"].iloc[-1]
+    if first_close == 0:
+        return 0.0
+    return (last_close - first_close) / first_close
+
+
+def build_sentiment_indicator_row(
+    news: pd.DataFrame, social: pd.DataFrame, history: pd.DataFrame
+) -> alt.LayerChart:
+    """Builds a compact three-indicator row: News · Reddit · Market, each coloured green/amber/red."""
+    news_score = _news_aggregate_score(news)
+    reddit_score = _reddit_aggregate_score(social)
+    market_change = _market_price_change(history)
+
+    indicators = pd.DataFrame({
+        "label": SIGNAL_SORT_ORDER,
+        "signal": [
+            _classify_signal(news_score),
+            _classify_signal(reddit_score),
+            _market_classify(market_change),
+        ],
+        "score": [round(news_score, 3), round(reddit_score, 3), round(market_change, 4)],
+        "y": [0, 0, 0],
+    })
+
+    shared_x = alt.X(
+        "label:N",
+        title=None,
+        sort=SIGNAL_SORT_ORDER,
+        axis=alt.Axis(labelAngle=0, ticks=False, domain=False,
+                      labelFontSize=15, labelFontWeight="bold"),
+    )
+    shared_color = alt.Color(
+        "signal:N",
+        scale=alt.Scale(domain=SIGNAL_DOMAIN, range=SIGNAL_COLORS),
+        legend=None,
+    )
+    shared_y = alt.Y("y:Q", axis=None, scale=alt.Scale(domain=[-1, 1]))
+
+    circles = (
+        alt.Chart(indicators)
+        .mark_circle(size=INDICATOR_CIRCLE_SIZE)
         .encode(
-            x=alt.X("published_date:T", title="Published Date"),
-            y=alt.Y("source:N", title="Source", sort="-x"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="orangered"), title="Relevance"),
-            opacity=alt.Opacity("relevance_score:Q",
-                                scale=alt.Scale(range=[0.15, 1.0])),
+            x=shared_x,
+            y=shared_y,
+            color=shared_color,
             tooltip=[
-                "title:N",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "published_date:T",
-                "confidence:N",
+                alt.Tooltip("label:N", title="Source"),
+                alt.Tooltip("signal:N", title="Signal"),
+                alt.Tooltip("score:Q", format="+.3f", title="Score"),
             ],
         )
-        .properties(height=chart_height)
     )
+
+    signal_text = (
+        alt.Chart(indicators)
+        .mark_text(dy=38, fontSize=12)
+        .encode(
+            x=alt.X("label:N", sort=SIGNAL_SORT_ORDER),
+            y=shared_y,
+            text=alt.Text("signal:N"),
+            color=shared_color,
+        )
+    )
+
+    return (circles + signal_text).properties(height=INDICATOR_ROW_HEIGHT)

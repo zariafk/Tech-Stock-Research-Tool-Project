@@ -23,7 +23,7 @@ def dashboard():
     # Tabs
     # ---------------------------------------------------------------------------
     tab_market, tab_ticker, tab_chatbot = st.tabs(
-        ["Market Data", "Company Specific", "Chatbot"])
+        ["Market Data", "Search Company", "Chatbot"])
 
     render_chatbot()  # Render chatbot in the background so it's available across tabs
 

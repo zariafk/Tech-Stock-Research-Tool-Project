@@ -51,7 +51,7 @@ def get_connection():
         )
 
     # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    secret = get_secret(os.environ["secrets_repo_name"])
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),
@@ -144,6 +144,8 @@ def dashboard():
             "Not enough data to calculate return/volatility metrics for this period.")
     else:
         render_return_volatility_section(metrics_df, period_short_label)
+
+    st.divider()
 
     # ── Market Data ──────────────────────────────────────────────────────────────
 

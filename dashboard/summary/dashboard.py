@@ -28,6 +28,7 @@ from .helpers import (
     render_social_section,
     render_divergence_section,
     render_visual_analytics,
+    get_company_summary
     TIME_OPTIONS
 )
 
@@ -157,6 +158,8 @@ def dashboard():
         "Consolidated view of market data, news signals, and community sentiment for specific stocks.")
     st.divider()
 
+    st.subheader("Company Summary")
+
     col1, col2 = st.columns([3, 1])
     with col1:
         search_input = st.text_input(
@@ -207,6 +210,14 @@ def dashboard():
 
     st.header(f"Market Data — {ticker} ({company_name})")
     render_market_section(latest, history)
+    st.divider()
+
+    with st.expander("📊 Company Summary", expanded=True):
+        with st.spinner("Generating summary..."):
+            summary = get_company_summary(ticker, company_name)
+
+        st.write(summary)
+
     st.divider()
 
     st.header("News & Market Signals")

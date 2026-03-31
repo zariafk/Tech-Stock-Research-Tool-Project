@@ -33,12 +33,11 @@ from .helpers import (
 
 load_dotenv()
 
-SECRETS_REPO = os.environ["secrets_repo_name"]
-
-
 # ---------------------------------------------------------------------------
 # Connection
 # ---------------------------------------------------------------------------
+
+
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
     """Retrieves a secret from AWS Secrets Manager and returns it as a dict."""
     client = boto3.client("secretsmanager", region_name=region)
@@ -57,7 +56,7 @@ def get_connection():
             password=os.environ["DB_PASSWORD"],
         )
 
-    secret = get_secret(SECRETS_REPO)
+    secret = get_secret("c22-trade-research-tool-secrets")
     return psycopg2.connect(
         host=secret["host"],
         port=int(secret["port"]),

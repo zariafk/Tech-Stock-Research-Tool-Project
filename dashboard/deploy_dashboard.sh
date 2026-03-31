@@ -13,7 +13,7 @@ aws ecr get-login-password --region "$REGION" | \
     docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
 echo "Building image..."
-docker build --platform linux/amd64 --provenance=false -t "${REPO_NAME}:${TAG}" .
+docker build --no-cache --platform linux/amd64 --provenance=false -t "${REPO_NAME}:${TAG}" .
 
 echo "Tagging image..."
 docker tag "${REPO_NAME}:${TAG}" "${ECR_URI}:${TAG}"

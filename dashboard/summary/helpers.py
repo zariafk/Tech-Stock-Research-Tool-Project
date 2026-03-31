@@ -255,16 +255,6 @@ def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFram
             st.altair_chart(scatter_chart, use_container_width=True)
             st.caption("Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
-    # with va_tab4:
-    #     st.subheader("Comments vs. Sentiment")
-    #     st.caption(
-    #         "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
-    #     comments_chart = build_comments_vs_sentiment_chart(extended_social)
-    #     if comments_chart is None:
-    #         st.info("No Reddit data available.")
-    #     else:
-    #         st.altair_chart(comments_chart, use_container_width=True)
-
     with va_tab4:
         st.subheader("Signal Overview")
         st.caption(

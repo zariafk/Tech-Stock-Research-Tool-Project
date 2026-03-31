@@ -157,46 +157,46 @@ def dashboard():
         "Consolidated view of market data, news signals, and community sentiment for specific stocks.")
     st.divider()
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        search_input = st.text_input(
-            "Search by ticker or company name",
-            placeholder="e.g., AAPL or Apple",
-            key="stock_search",
+    with st.container(border=True):
+        # Search by company name or ticker
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            search_input = st.text_input(
+                "Search by ticker or company name",
+                placeholder="e.g., AAPL or Apple",
+                key="stock_search",
+            )
+        with col2:
+            st.write("")
+            search_btn = st.button("Search", use_container_width=True)
+
+        if not (search_btn or search_input):
+            return
+
+        if not search_input:
+            st.warning("Please enter a stock ticker or company name.")
+            return
+        stock_result = fetch_stock_by_ticker_or_name(conn, search_input)
+        if not stock_result:
+            st.error("Stock not found. Please check the ticker or company name.")
+            return
+
+        stock_id, ticker, company_name = stock_result
+        # Time range selection for filtering
+        time_label = st.radio(
+            "Time Range",
+            list(TIME_OPTIONS.keys()),
+            horizontal=True,
+            key=f"trends_time_range_{ticker}",
         )
-    with col2:
-        st.write("")
-        search_btn = st.button("Search", use_container_width=True)
+        time_days = TIME_OPTIONS[time_label]
 
-    if not (search_btn or search_input):
-        return
-
-    if not search_input:
-        st.warning("Please enter a stock ticker or company name.")
-        return
-
-    stock_result = fetch_stock_by_ticker_or_name(conn, search_input)
-    if not stock_result:
-        st.error("Stock not found. Please check the ticker or company name.")
-        return
-
-    stock_id, ticker, company_name = stock_result
-    st.divider()
-
-    time_label = st.radio(
-        "Time Range",
-        list(TIME_OPTIONS.keys()),
-        horizontal=True,
-        key=f"trends_time_range_{ticker}",
-    )
-    time_days = TIME_OPTIONS[time_label]
-
-    if time_days is None:
-        cutoff_date = None
-    else:
-        cutoff_date = (
-            pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
-        ).date()
+        if time_days is None:
+            cutoff_date = None
+        else:
+            cutoff_date = (
+                pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
+            ).date()
 
     st.divider()
 

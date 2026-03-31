@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
-# change placeholders to your values
-AWS_ACCOUNT_ID=<accoount-id>
+
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-2"
-REPO_NAME=<repository-name>
+REPO_NAME="c22-stocksiphon-rss-ecr"
 TAG="latest"
 
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}"

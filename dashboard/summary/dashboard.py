@@ -33,7 +33,7 @@ from .helpers import (
 
 load_dotenv()
 
-SECRETS_REPO = "c22-trade-research-tool-secrets"
+SECRETS_REPO = os.environ["secrets_repo_name"]
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,15 @@ def dashboard():
     extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
     st.header(f"Market Data — {ticker} ({company_name})")
-    render_market_section(latest, history)
+    render_market_section(latest, history, time_label)
+    st.divider()
+
+    with st.expander("📊 Company Summary", expanded=True):
+        with st.spinner("Generating summary..."):
+            summary = get_company_summary(ticker, company_name)
+
+        st.write(summary)
+
     st.divider()
 
     render_summary_analytics(history, extended_social, social, news)

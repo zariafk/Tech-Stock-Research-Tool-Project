@@ -51,7 +51,7 @@ def get_connection():
         )
 
     # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    secret = get_secret(os.environ["secrets_repo_name"])
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),
@@ -72,6 +72,7 @@ if st.session_state.conn is None:
     except Exception as e:
         st.sidebar.error("Could not connect to database.")
         st.sidebar.caption(str(e))
+        raise RuntimeError("Database connection failed")
 
 conn = st.session_state.conn
 
@@ -111,6 +112,9 @@ def fetch_return_volatility_data(_conn) -> pd.DataFrame:
 
 
 def dashboard():
+    if conn is None:
+        st.error("No database connection. Check the sidebar for connection details.")
+        return
 
     # ── Time Range Filter ────────────────────────────────────────────────────────
     time_label = st.radio(

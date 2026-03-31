@@ -6,13 +6,19 @@ RUN pip3 install -r requirements.txt
 
 COPY dashboard.py .
 
-COPY live/dashboard_graphs.py ./live/
-COPY live/dashboard_queries.py ./live/
-COPY live/live_dashboard.py ./live/
+COPY summary/__init__.py ./summary/
+COPY trends/__init__.py ./trends/
 
-COPY historical/dashboard_graphs.py ./historical/
-COPY historical/dashboard_queries.py ./historical/
-COPY historical/hist_dashboard.py ./historical/
+COPY summary/charts.py ./summary/
+COPY summary/dashboard.py ./summary/
+COPY summary/helpers.py ./summary/
+COPY summary/queries.py ./summary/
+
+COPY trends/charts.py ./trends/
+COPY trends/dashboard.py ./trends/
+COPY trends/helpers.py ./trends/
+COPY trends/queries.py ./trends/
+COPY trends/returnVvolatility.py ./trends/
 
 # listen on port 8501 for Streamlit
 EXPOSE 8501

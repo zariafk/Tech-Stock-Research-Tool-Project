@@ -18,6 +18,11 @@ resource "aws_ecr_repository" "c22_stocksiphon_dashboard" {
   name = "c22-stocksiphon-dashboard-ecr"
 }
 
+data "aws_ecr_image" "dashboard" {
+  repository_name = aws_ecr_repository.c22_stocksiphon_dashboard.name
+  image_tag       = "latest"
+}
+
 resource "aws_iam_role" "c22_stocksiphon_ecs_execution_role" {
   name = "c22-stocksiphon-ecs-execution-role"
 
@@ -59,13 +64,22 @@ resource "aws_iam_role_policy" "c22_stocksiphon_dashboard_task_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "rds-db:connect"
-      ]
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "rds-db:connect"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:eu-west-2:129033205317:secret:c22-trade-research-tool-secrets*"
+      }
+    ]
   })
 }
 
@@ -104,14 +118,14 @@ resource "aws_ecs_task_definition" "c22_stocksiphon_dashboard_task" {
 
   container_definitions = jsonencode([{
     name  = "stocksiphon-dashboard"
-    image = "${aws_ecr_repository.c22_stocksiphon_dashboard.repository_url}:latest"
+    image = "${aws_ecr_repository.c22_stocksiphon_dashboard.repository_url}@${data.aws_ecr_image.dashboard.image_digest}"
     portMappings = [{
       containerPort = 8501
       hostPort      = 8501
     }]
     environment = [
       {
-        name  = "STREAMLIT_SERVER_PORT"
+        name  = "SECRETS_REPO_NAME"
         value = var.secrets_repo_name
       }
     ]

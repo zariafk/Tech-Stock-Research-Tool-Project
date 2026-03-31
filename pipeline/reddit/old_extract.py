@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HEADER = {"User-Agent": "script:v1.0 (by /u/sigmabot)"}
 REQUEST_TIMEOUT = 30
-ARCTIC_SHIFT_URL = "https://arctic-shift.photon-reddit.com/api/posts/search"
 
 
 def load_mappings(file_path: str = "../company_mapping.csv") -> pd.DataFrame:
@@ -171,41 +170,23 @@ def extract_main(
     *,
     include_comments: bool = False,
 ) -> list[dict]:
-    """Fetches recent posts from Arctic Shift for each subreddit."""
+    """Main function to run the functionality of the extract script."""
     all_posts = []
 
     for subreddit in target_subreddits:
-        logger.info("Fetching posts for r/%s from Arctic Shift", subreddit)
+        sub = RedditExtractor(subreddit=subreddit)
+        result = sub.get_post_data()
 
-        params = {
-            "subreddit": subreddit,
-            "limit": 25,
-            "sort": "desc",
-        }
-
-        try:
-            response = requests.get(
-                ARCTIC_SHIFT_URL,
-                params=params,
-                headers=DEFAULT_HEADER,
-                timeout=REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
-            posts = response.json().get("data", [])
-        except Exception as exc:
-            logger.warning("Failed to fetch r/%s: %s", subreddit, exc)
-            continue
-
-        if not posts:
+        if not result:
             logger.warning("No data returned for r/%s, skipping", subreddit)
             continue
 
-        # Wrap each post in {"data": ...} to match the format
-        # that deduplicate and transform already expect
-        wrapped = [{"data": post} for post in posts]
-        all_posts += wrapped
+        post_data = result.get("data", {}).get("children", [])
 
-        logger.info("Got %d posts from r/%s", len(posts), subreddit)
+        if include_comments:
+            post_data = sub.enrich_posts_with_comments(post_data)
+
+        all_posts += post_data
         time.sleep(1)
 
     return all_posts

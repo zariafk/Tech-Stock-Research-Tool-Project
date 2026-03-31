@@ -122,8 +122,8 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
         .properties(height=60)
     )
 
-    main_chart = (price_line + sentiment_dots).properties(height=350)
-    chart = alt.vconcat(main_chart, volume_bar).resolve_scale(x='shared')
+    chart = (price_line + sentiment_dots).properties(height=350)
+    # chart = alt.concat(main_chart, volume_bar).resolve_scale(x='shared')
     return chart, social_merged
 
 

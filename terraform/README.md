@@ -1,107 +1,166 @@
-# Terraform State & Modules
+# Terraform Infrastructure
 
-## Shared State Bucket
+## Overview
 
-All `.tfstate` files are stored in a shared S3 bucket so the team works from a single source of truth. The bucket `c22-lito-lmnh-state-bucket` is already live in `eu-west-2` with versioning and AES-256 encryption. **Do not delete or modify it.**
+This folder contains all Terraform configuration for the **StockSiphon** (Tech Stock Research Tool) project. It provisions the full AWS infrastructure across six independent modules, each managing a distinct layer of the system:
 
-### Setup
+| Module | Purpose |
+|---|---|
+| `state_bucket/` | Bootstraps the shared S3 bucket used to store all remote Terraform state |
+| `secrets_repository/` | Creates the AWS Secrets Manager secret shell used by all pipelines |
+| `database/` | PostgreSQL 16 RDS instance (the central data store) |
+| `pipeline/` | Three Lambda functions (RSS, Alpaca, Reddit) + ECR repos + EventBridge schedules |
+| `rag/` | Full RAG stack — ChromaDB on ECS Fargate (with EFS), ingest/query Lambdas, API Gateway |
+| `dashboard/` | Streamlit dashboard on ECS Fargate |
+| `terraform_template/` | Copy-paste template for adding new modules |
 
-Add this block to the top of your Terraform config, replacing `<your-project-path>` with a unique path (e.g. `dashboard`, `envs/prod`, `pipeline`):
-
-```hcl
-terraform {
-  backend "s3" {
-    bucket  = "c22-lito-lmnh-state-bucket"
-    key     = "global/<your-project-path>/terraform.tfstate"
-    region  = "eu-west-2"
-    encrypt = true
-  }
-}
-```
-
-**Every project must have a unique `key`** — duplicate keys will overwrite each other's state. Then run `terraform init`.
+All modules deploy to `eu-west-2` (London) under the `c22-stocksiphon-` naming prefix.
 
 ---
 
-## Terraform Modules
+## What You Need
 
-A module is a reusable folder of `.tf` files — like a function in programming. You define infrastructure once and call it with different parameters wherever you need it. This keeps things consistent, readable, and DRY.
+### Tools
 
-### Project Structure
+- [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.0
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configured with valid credentials
+- [Docker](https://docs.docker.com/get-docker/) (required to build and push container images before deploying pipeline/rag/dashboard)
 
-```
-project/
-├── main.tf          # Calls your modules
-├── variables.tf     # Root-level inputs
-├── outputs.tf       # Root-level outputs
-├── terraform.tf     # Backend config & providers
-└── modules/
-    └── s3-bucket/
-        ├── main.tf      # Resources
-        ├── variables.tf # Inputs
-        └── outputs.tf   # Exposed values
-```
+### AWS Credentials
 
-Every module has three files: `main.tf`, `variables.tf`, `outputs.tf`.
+Configure the AWS CLI with credentials that have permissions to manage ECS, ECR, Lambda, RDS, S3, EFS, API Gateway, Secrets Manager, IAM, EventBridge, and CloudWatch:
 
-### Example: S3 Bucket Module
-
-**`modules/s3-bucket/variables.tf`** — define inputs:
-```hcl
-variable "bucket_name" {
-  type = string
-}
-variable "enable_versioning" {
-  type    = bool
-  default = true
-}
+```bash
+aws configure
+# AWS Access Key ID:     <your-key>
+# AWS Secret Access Key: <your-secret>
+# Default region:        eu-west-2
+# Default output format: json
 ```
 
-**`modules/s3-bucket/main.tf`** — define resources using those inputs:
-```hcl
-resource "aws_s3_bucket" "this" {
-  bucket = var.bucket_name
-}
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
-}
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-```
+### Secrets
 
-**`modules/s3-bucket/outputs.tf`** — expose values for other resources:
-```hcl
-output "bucket_arn" {
-  value = aws_s3_bucket.this.arn
-}
-```
+All runtime secrets are pulled from AWS Secrets Manager under the secret name `c22-trade-research-tool-secrets`. The secret values must be populated out-of-band (i.e. manually via the AWS console or CLI) before the pipelines or RAG service will function. Sensitive Terraform variables (`db_password`, `openai_api_key`) are passed via `terraform.tfvars` — never commit these files.
 
-**Root `main.tf`** — call the module:
-```hcl
-module "data_bucket" {
-  source            = "./modules/s3-bucket"
-  bucket_name       = "c22-my-data-bucket"
-  enable_versioning = true
-}
-```
+### Shared State Bucket
 
-Reference outputs elsewhere with `module.data_bucket.bucket_arn`.
+Remote state for all modules is stored in `c22-tsrt-terraform-state` (S3, AES-256, versioning enabled). This bucket is bootstrapped once by `state_bucket/` and must exist before any other module can be initialised. **Do not delete it.**
+
+Each module uses a unique state key under `stocksiphon/<module>/terraform.tfstate`.
 
 ---
 
-## Team Rules
+## How to Deploy
 
-1. Use a **unique `key` path** in the S3 backend for each project.
-2. **Don't hardcode** values that change between environments — use variables.
-3. **One module per logical component** (e.g. a bucket + its encryption + versioning).
-4. Run `terraform init` after pulling changes that add or modify modules.
-5. Always run `terraform plan` before `terraform apply` — review before you deploy.
+Container images must be built and pushed to ECR before Terraform provisions the Lambda or ECS resources that reference them. The general flow for each module is:
+
+### 1. Build and push the Docker image (pipeline, rag, dashboard)
+
+```bash
+# Authenticate Docker with ECR
+aws ecr get-login-password --region eu-west-2 | \
+  docker login --username AWS --password-stdin \
+  129033205317.dkr.ecr.eu-west-2.amazonaws.com
+
+# Build the image (run from the relevant source folder)
+docker build -t <ecr-repo-name> .
+
+# Tag and push
+docker tag <ecr-repo-name>:latest \
+  129033205317.dkr.ecr.eu-west-2.amazonaws.com/<ecr-repo-name>:latest
+
+docker push \
+  129033205317.dkr.ecr.eu-west-2.amazonaws.com/<ecr-repo-name>:latest
+```
+
+ECR repository names follow the pattern `c22-stocksiphon-{rss,alpaca,reddit,rag-ingest,rag-query,dashboard}-{ecr,lambda}`.
+
+Each pipeline source folder (`pipeline/alpaca/`, `pipeline/rss/`, `pipeline/reddit/`, `rag_service/`, `dashboard/`) contains a `deploy_*.sh` script that wraps the build-tag-push steps above.
+
+### 2. Apply Terraform
+
+```bash
+cd terraform/<module>
+terraform init
+terraform plan
+terraform apply
+```
+
+### Recommended Deployment Order
+
+Deploy modules in this order to satisfy dependencies:
+
+1. `state_bucket/` — must exist first (run once, state is local)
+2. `secrets_repository/` — populate secret values in AWS console after apply
+3. `database/` — RDS must be up before pipelines write to it
+4. `rag/` — ChromaDB ECS service and Lambda functions
+5. `pipeline/` — Lambdas reference the RAG ingest Lambda ARN
+6. `dashboard/` — references the shared ECS cluster
+
+---
+
+## How to Run
+
+### Initialise a module
+
+```bash
+cd terraform/<module>
+terraform init
+```
+
+Run this after cloning the repo, or after any change to provider versions or module sources.
+
+### Plan changes
+
+```bash
+terraform plan
+```
+
+Always review the plan before applying. Check for unexpected resource replacements (shown as `-/+`).
+
+### Apply changes
+
+```bash
+terraform apply
+```
+
+Type `yes` when prompted, or use `-auto-approve` in CI pipelines.
+
+### Destroy resources
+
+```bash
+terraform destroy
+```
+
+> **Warning:** The RDS instance is configured with `skip_final_snapshot = true`. Running `terraform destroy` on `database/` will permanently delete all data with no automated backup.
+
+### Start / stop the dashboard service
+
+The dashboard ECS service is deployed with `desired_count = 0` to save costs. To start it:
+
+```bash
+aws ecs update-service \
+  --cluster c22-stocksiphon-cluster \
+  --service c22-stocksiphon-dashboard-service \
+  --desired-count 1 \
+  --region eu-west-2
+```
+
+Set `--desired-count 0` to stop it again.
+
+### Add a new module
+
+Copy `terraform_template/bucket_state.tf` into your new module folder and update the `key` to a unique path under `stocksiphon/`. Then run `terraform init`.
+
+---
+
+## Notes
+
+- **Pipeline schedule:** All three data pipelines (RSS, Alpaca, Reddit) run every 20 minutes, Monday–Friday, 12:00–22:00 UTC via EventBridge Scheduler (`cron(0/20 12-22 ? * MON-FRI *)`).
+- **Cross-Lambda invocation:** The pipeline Lambda IAM role has explicit permission to invoke the RAG ingest Lambda (`c22-stocksiphon-rag-ingest-lambda`), which is the mechanism by which ingested data is embedded and stored in ChromaDB.
+- **ChromaDB persistence:** The ChromaDB ECS task mounts an EFS volume at `/chroma`, so vector data survives task restarts. The EFS mount targets use transit encryption.
+- **RAG query endpoint:** After applying `rag/`, the public API Gateway URL is printed as the `query_api_url` output. Use `terraform output query_api_url` to retrieve it.
+- **RDS is publicly accessible:** The RDS security group allows TCP/5432 from `0.0.0.0/0`. This is intentional for development access but should be restricted to known IPs or a VPC CIDR in production.
+- **State bucket has `prevent_destroy`:** The `state_bucket/` module uses a `prevent_destroy` lifecycle rule. You cannot accidentally delete the state bucket with `terraform destroy`.
+- **Provider versions:** The `rag/` module pins the AWS provider to `~> 5.0` (currently `5.100.0`); `dashboard/` uses `6.38.0`. Keep these consistent when upgrading.
+- **VPC / subnets:** All modules share the same VPC (`vpc-03f0d39570fbaa750`) and subnets (`subnet-046ec8b4e41d59ea8`, `subnet-0cfeaca0e941dea5b`, `subnet-055ac264d45bec709`). These are hardcoded in `terraform.tfvars` — update all modules together if the network changes.

@@ -9,12 +9,12 @@ resource "aws_lambda_function" "ingest_lambda" {
     role          = aws_iam_role.ingest_lambda_role.arn
     package_type  = "Image"
     image_uri     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.eu-west-2.amazonaws.com/c22-stocksiphon-ingest-lambda:latest"
-    timeout       = 60
-    memory_size   = 512
+    timeout       = 300
+    memory_size   = 1024
 
     environment {
         variables = {
-            SECRET_NAME = "c22-trade-research-tool-secrets"
+            SECRET_NAME = var.secret_name
             CHROMA_HOST = var.chroma_host
         }
     }
@@ -31,7 +31,7 @@ resource "aws_lambda_function" "query_lambda" {
 
     environment {
         variables = {
-            SECRET_NAME = "c22-trade-research-tool-secrets"
+            SECRET_NAME = var.secret_name
             CHROMA_HOST = var.chroma_host
         }
     }

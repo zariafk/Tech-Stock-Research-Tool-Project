@@ -11,6 +11,7 @@ COPY alpaca_transform_cleaning.py ${LAMBDA_TASK_ROOT}/
 COPY alpaca_load.py ${LAMBDA_TASK_ROOT}/
 COPY top_100_tech_companies.py ${LAMBDA_TASK_ROOT}/
 COPY logger.py ${LAMBDA_TASK_ROOT}/
+COPY rag_ingest_invoke.py ${LAMBDA_TASK_ROOT}/
 
 COPY global-bundle.pem ${LAMBDA_TASK_ROOT}/
 

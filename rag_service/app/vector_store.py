@@ -1,22 +1,39 @@
 import os
 import chromadb
 
+CHROMA_CLIENT = None
+COLLECTION = None
+
 
 def get_chroma_client():
+    """Initialize and return a ChromaDB client."""
+    global CHROMA_CLIENT
+
+    if CHROMA_CLIENT is not None:
+        return CHROMA_CLIENT
+
     chroma_host = os.getenv("CHROMA_HOST")
 
     if not chroma_host:
         raise ValueError("CHROMA_HOST is not set")
 
-    return chromadb.HttpClient(
+    CHROMA_CLIENT = chromadb.HttpClient(
         host=chroma_host,
         port=8000
     )
+    return CHROMA_CLIENT
 
 
 def get_collection():
+    """Get or create the ChromaDB collection for stock data."""
+    global COLLECTION
+
+    if COLLECTION is not None:
+        return COLLECTION
+
     client = get_chroma_client()
-    return client.get_or_create_collection(name="stock_data")
+    COLLECTION = client.get_or_create_collection(name="stock_data")
+    return COLLECTION
 
 
 def build_document_id(doc: dict) -> str:

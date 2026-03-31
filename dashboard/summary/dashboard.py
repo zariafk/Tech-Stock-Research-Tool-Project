@@ -7,6 +7,7 @@ from .queries import (
     get_news_signals,
     get_social_signals,
     get_extended_social,
+    get_company_summary,
 )
 from .charts import (
     build_comments_vs_sentiment_chart,
@@ -23,6 +24,13 @@ def dashboard():
     st.caption(
         "Consolidated view of market data, news signals, and community sentiment for specific stocks.")
     st.divider()
+
+    st.subheader("Company Summary")
+
+    with st.spinner("Generating summary..."):
+        summary = get_company_summary(ticker, company_name)
+
+    st.write(summary)
 
     col1, col2 = st.columns([3, 1])
     with col1:

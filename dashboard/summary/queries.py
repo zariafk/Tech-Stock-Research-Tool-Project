@@ -1,3 +1,4 @@
+import requests
 import os
 import json
 
@@ -6,7 +7,8 @@ import pandas as pd
 import boto3
 
 
-SECRETS_REPO = "c22-trade-research-tool-secrets"
+SECRETS_REPO = os.getenv("SECRETS_REPO")
+RAG_API_URL = os.getenv("RAG_API_URL")
 
 
 def get_secret(secret_name: str, region: str = "eu-west-2") -> dict:
@@ -20,7 +22,8 @@ def get_db_connection():
     """Establish connection to PostgreSQL RDS database."""
     try:
         secrets = get_secret(SECRETS_REPO)
-        return psycopg2.connect(
+
+        conn = psycopg2.connect(
             host=secrets["host"],
             port=int(secrets["port"]),
             user=secrets["username"],
@@ -28,15 +31,17 @@ def get_db_connection():
             dbname=secrets["dbname"],
             sslmode="require"
         )
-    except psycopg2.DatabaseError as err:
-        raise psycopg2.DatabaseError(
-            "Failed to connect to database. Check environment variables."
-        ) from err
+        return conn
+
+    except Exception as err:
+        raise Exception(f"Error connecting to database: {err}") from err
 
 
 def get_stock_by_ticker_or_name(search_term):
     """Search for stock by ticker or name. Returns (stock_id, ticker, stock_name) or None."""
+    print("get_stock_by_ticker_or_name called")
     conn = get_db_connection()
+    print("conn:", conn)
     cursor = conn.cursor()
     search_lower = search_term.lower()
 
@@ -129,3 +134,18 @@ def get_full_market_history(stock_id: int) -> pd.DataFrame:
     """, conn, params=(stock_id,))
     conn.close()
     return history
+
+
+def get_company_summary(ticker: str, company_name: str) -> str:
+    payload = {
+        "question": f"Generate a summary for {company_name} ({ticker}) including recent price context, news, and sentiment.",
+        "ticker": ticker
+    }
+
+    try:
+        response = requests.post(RAG_API_URL, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("answer", "No summary returned.")
+    except requests.RequestException as e:
+        return f"Error retrieving summary: {e}"

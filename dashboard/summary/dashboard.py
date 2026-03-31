@@ -206,7 +206,7 @@ def dashboard():
     extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
     st.header(f"Market Data — {ticker} ({company_name})")
-    render_market_section(latest, history)
+    render_market_section(latest, history, time_label)
     st.divider()
 
     st.header("News & Market Signals")

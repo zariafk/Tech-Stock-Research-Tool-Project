@@ -18,3 +18,9 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "secrets_repo_name" {
+  description = "Name of the AWS Secrets Manager secret containing database credentials"
+  type        = string
+  sensitive   = true
+}
+

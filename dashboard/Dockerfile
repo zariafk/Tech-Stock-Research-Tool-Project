@@ -6,6 +6,9 @@ RUN pip3 install -r requirements.txt
 
 COPY dashboard.py .
 
+COPY summary/__init__.py ./summary/
+COPY trends/__init__.py ./trends/
+
 COPY summary/charts.py ./summary/
 COPY summary/dashboard.py ./summary/
 COPY summary/helpers.py ./summary/

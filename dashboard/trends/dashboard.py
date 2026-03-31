@@ -51,7 +51,7 @@ def get_connection():
         )
 
     # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret("c22-trade-research-tool-secrets")
+    secret = get_secret(os.environ["SECRETS_REPO_NAME"])
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),

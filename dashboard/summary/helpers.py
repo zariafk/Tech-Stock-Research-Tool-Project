@@ -10,7 +10,7 @@ from .charts import (
     build_signal_convergence_chart,
     build_sentiment_momentum_chart,
     build_engagement_scatter_chart,
-    build_news_horizon_chart,
+    build_sentiment_indicator_row,
 )
 
 TIME_OPTIONS: dict[str, int | None] = {
@@ -192,9 +192,9 @@ def render_divergence_section(news: pd.DataFrame, social: pd.DataFrame):
         )
 
 
-def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame):
-    """Render the Visual Analytics tab group with all interactive Altair charts."""
-    st.header("Visual Analytics")
+def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame):
+    """Render the Summary Analytics tab group with all interactive Altair charts."""
+    st.header("Summary Analytics")
     st.caption(
         "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
@@ -202,7 +202,7 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
         "📌 Signal Convergence",
         "📈 Sentiment Momentum",
         "💬 Comments vs Sentiment",
-        "📰 News Horizon",
+        "💭 Sources Sentiment Overview",
     ])
 
     with va_tab1:
@@ -266,11 +266,9 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
     #         st.altair_chart(comments_chart, use_container_width=True)
 
     with va_tab4:
-        st.subheader("News Coverage Density")
+        st.subheader("Signal Overview")
         st.caption(
-            "Each circle is an article. Vertical clusters mean multiple outlets published simultaneously — a likely news event.")
-        horizon_chart = build_news_horizon_chart(news)
-        if horizon_chart is None:
-            st.info("No news data available to render this chart.")
-        else:
-            st.altair_chart(horizon_chart, use_container_width=True)
+            "Aggregate sentiment for each source at a glance. Green = positive · Amber = neutral · Red = negative. "
+            "Divergence between News and Reddit may signal institutional vs retail disagreement.")
+        indicator_chart = build_sentiment_indicator_row(news, social, history)
+        st.altair_chart(indicator_chart, use_container_width=True)

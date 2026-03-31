@@ -27,7 +27,7 @@ from .helpers import (
     render_news_section,
     render_social_section,
     render_divergence_section,
-    render_visual_analytics,
+    render_summary_analytics,
     TIME_OPTIONS
 )
 
@@ -209,6 +209,8 @@ def dashboard():
     render_market_section(latest, history)
     st.divider()
 
+    render_summary_analytics(history, extended_social, social, news)
+
     st.header("News & Market Signals")
     render_news_section(news)
     st.divider()
@@ -218,7 +220,6 @@ def dashboard():
     render_divergence_section(news, social)
     st.divider()
 
-    render_visual_analytics(history, extended_social, social, news)
     st.caption(
         "_Dashboard updated with live data from RDS. Refresh to see latest signals._")
 

@@ -38,11 +38,11 @@ def get_db_connection():
     """Create and return a connection to the RDS database."""
     try:
         return psycopg2.connect(
-            host=os.environ["host"],
-            port=os.environ["port"],
-            dbname=os.environ["dbname"],
-            user=os.environ["username"],
-            password=os.environ["password"]
+            host=os.environ["DB_HOST"],
+            port=os.environ.get("DB_PORT", 5432),
+            dbname=os.environ["DB_NAME"],
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
         )
     except KeyError as error:
         raise EnvironmentError(

@@ -63,3 +63,18 @@ REDDIT_QUERY = """
     JOIN subreddit sub ON sub.subreddit_id = p.subreddit_id
     ORDER BY p.created_at DESC
 """
+
+# Return vs Volatility query
+RETURN_VOLATILITY_QUERY = """
+    SELECT
+        h.stock_id,
+        s.ticker,
+        h.bar_date,
+        h.close,
+        h.volume,
+        h.trade_count
+    FROM alpaca_history h
+    JOIN stock s ON h.stock_id = s.stock_id
+    WHERE h.close IS NOT NULL
+    ORDER BY s.ticker, h.bar_date
+"""

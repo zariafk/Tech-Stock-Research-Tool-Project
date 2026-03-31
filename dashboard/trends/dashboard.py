@@ -8,13 +8,19 @@ Run:
     streamlit run app.py
 """
 
-from .queries import HISTORY_QUERY, LIVE_QUERY, SENTIMENT_QUERY, NEWS_QUERY, REDDIT_QUERY
+from .queries import HISTORY_QUERY, LIVE_QUERY, SENTIMENT_QUERY, NEWS_QUERY, REDDIT_QUERY, RETURN_VOLATILITY_QUERY
 from .charts import build_stacked_bar_chart, build_price_line_chart, build_sentiment_lollipop_chart
+from .helpers import (
+    TIME_OPTIONS,
+    apply_time_filter,
+    add_daily_returns,
+    get_period_short_label,
+    build_return_volatility_table,
+    render_return_volatility_section,
+)
 import psycopg2
 import streamlit as st
 import pandas as pd
-import altair as alt
-from datetime import date, timedelta
 from dotenv import load_dotenv
 import os
 import json
@@ -96,23 +102,12 @@ def fetch_reddit(_conn) -> pd.DataFrame:
     return pd.read_sql(REDDIT_QUERY, _conn)
 
 
-TIME_OPTIONS = {
-    "1 Month":    30,
-    "3 Months":   90,
-    "6 Months":   180,
-    "1 Year":     365,
-    "From Start": None,
-}
-
-
-def apply_time_filter(df: pd.DataFrame, date_col: str, time_days: int | None) -> pd.DataFrame:
-    """Filters a DataFrame to rows within the last time_days days. Returns full df if time_days is None."""
-    if time_days is None:
-        return df
-    cutoff = pd.Timestamp(date.today() - timedelta(days=time_days), tz="UTC")
-    df[date_col] = pd.to_datetime(df[date_col], utc=True)
-    filtered_date = df[df[date_col].isna() | (df[date_col] >= cutoff)]
-    return filtered_date
+@st.cache_data(ttl=1200, show_spinner="Fetching return/volatility data...")
+def fetch_return_volatility_data(_conn) -> pd.DataFrame:
+    """Load and sort historical price data for return/volatility computation."""
+    dataframe = pd.read_sql(RETURN_VOLATILITY_QUERY, _conn)
+    dataframe["bar_date"] = pd.to_datetime(dataframe["bar_date"])
+    return dataframe.sort_values(["ticker", "bar_date"]).reset_index(drop=True)
 
 
 def dashboard():
@@ -127,6 +122,24 @@ def dashboard():
     time_days = TIME_OPTIONS[time_label]
 
     st.divider()
+
+    # ── Return vs Volatility ─────────────────────────────────────────────────────
+    try:
+        rv_df_raw = fetch_return_volatility_data(conn)
+    except Exception as e:
+        st.error(f"Failed to load return/volatility data: {e}")
+        return
+
+    rv_df = add_daily_returns(rv_df_raw)
+    period_short_label = get_period_short_label(time_label)
+    metrics_df = build_return_volatility_table(
+        rv_df, time_days, period_short_label)
+
+    if metrics_df.empty:
+        st.info(
+            "Not enough data to calculate return/volatility metrics for this period.")
+    else:
+        render_return_volatility_section(metrics_df, period_short_label)
 
     # ── Market Data ──────────────────────────────────────────────────────────────
 
@@ -248,3 +261,4 @@ def dashboard():
 
     combined_lollipop = build_sentiment_lollipop_chart(df_combined)
     st.altair_chart(combined_lollipop, use_container_width=True)
+    st.divider()

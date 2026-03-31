@@ -10,8 +10,7 @@ from .charts import (
     build_signal_convergence_chart,
     build_sentiment_momentum_chart,
     build_engagement_scatter_chart,
-    build_news_horizon_chart,
-    build_comments_vs_sentiment_chart,
+    build_sentiment_indicator_row,
 )
 import os
 import requests
@@ -181,17 +180,20 @@ def render_news_section(news: pd.DataFrame):
         return
 
     sentiment_avg = news["sentiment_score"].mean()
-    relevance_avg = news["relevance_score"].mean()
     positive_count = (news["sentiment_score"] > 0.5).sum()
     negative_count = (news["sentiment_score"] < -0.5).sum()
     neutral_count = len(news) - positive_count - negative_count
+
+    last_updated = pd.to_datetime(news["published_date"]).max()
+    last_updated_str = last_updated.strftime(
+        "%d %b %Y, %H:%M") if pd.notna(last_updated) else "N/A"
 
     col1, col2, col3 = st.columns(3)
     with col1:
         sentiment_label, _ = classify_sentiment(sentiment_avg)
         st.metric("News Sentiment", sentiment_label, f"{sentiment_avg:.2f}")
     with col2:
-        st.metric("Average Relevance", f"{relevance_avg:.2f}")
+        st.metric("Last Updated", last_updated_str)
     with col3:
         st.metric("Articles Tracked", len(news))
 
@@ -204,20 +206,31 @@ def render_news_section(news: pd.DataFrame):
         summary += f"**Mixed sentiment**. {positive_count} positive, {negative_count} negative, {neutral_count} neutral."
     st.info(summary)
 
-    st.subheader("Recent Coverage")
-    for _, row in news.head(5).iterrows():
-        s_score = row["sentiment_score"]
-        color = "green" if s_score > 0.2 else "red" if s_score < -0.2 else "gray"
-        confidence = row.get("confidence", "—")
-        with st.container(border=True):
-            c1, c2 = st.columns([1, 4])
-            c1.markdown(f"### :{color}[{s_score:+.1f}]")
-            c1.caption(f"Rel: {row['relevance_score']:.2f} | {confidence}")
-            c2.markdown(f"**{row['title']}**")
-            c2.markdown(
-                f"*{row['source']} • {row['published_date'].strftime('%d %b')}*")
-            if row["analysis"]:
-                st.markdown(f"> **AI Take:** {row['analysis']}")
+    NEWS_CARD_HEIGHT_PX = 110
+    NEWS_CARDS_VISIBLE = 3
+    scroll_container_height = NEWS_CARD_HEIGHT_PX * NEWS_CARDS_VISIBLE
+
+    with st.expander("Recent Coverage", expanded=False):
+        with st.container(height=scroll_container_height):
+            for _, row in news.iterrows():
+                s_score = row["sentiment_score"]
+                color = "green" if s_score > 0.2 else "red" if s_score < -0.2 else "gray"
+                confidence = row.get("confidence", "—")
+                with st.container(border=True):
+                    c1, c2 = st.columns([1, 4])
+                    c1.markdown(f"### :{color}[{s_score:+.1f}]")
+                    c1.caption(
+                        f"Rel: {row['relevance_score']:.2f} | {confidence}")
+                    article_url = row.get("url", "")
+                    if article_url:
+                        title_html = f'<a href="{article_url}" target="_blank" rel="noopener noreferrer"><strong>{row["title"]}</strong></a>'
+                        c2.markdown(title_html, unsafe_allow_html=True)
+                    else:
+                        c2.markdown(f"**{row['title']}**")
+                    c2.markdown(
+                        f"*{row['source']} • {row['published_date'].strftime('%d %b')}*")
+                    if row["analysis"]:
+                        st.markdown(f"> **AI Take:** {row['analysis']}")
 
 
 def render_social_section(social: pd.DataFrame):
@@ -281,18 +294,17 @@ def render_divergence_section(news: pd.DataFrame, social: pd.DataFrame):
         )
 
 
-def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame):
-    """Render the Visual Analytics tab group with all interactive Altair charts."""
-    st.header("Visual Analytics")
+def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame):
+    """Render the Summary Analytics tab group with all interactive Altair charts."""
+    st.header("Summary Analytics")
     st.caption(
         "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
-    va_tab1, va_tab2, va_tab3, va_tab4, va_tab5 = st.tabs([
+    va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
         "📌 Signal Convergence",
         "📈 Sentiment Momentum",
-        "📊 Engagement Matrix",
         "💬 Comments vs Sentiment",
-        "📰 News Horizon",
+        "💭 Sources Sentiment Overview",
     ])
 
     with va_tab1:
@@ -346,32 +358,9 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
             st.caption("Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
     with va_tab4:
-        st.subheader("Comments vs. Sentiment")
+        st.subheader("Signal Overview")
         st.caption(
-            "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
-        comments_chart = build_comments_vs_sentiment_chart(extended_social)
-        if comments_chart is None:
-            st.info("No Reddit data available.")
-        else:
-            st.altair_chart(comments_chart, use_container_width=True)
-
-    with va_tab5:
-        st.subheader("News Coverage Density")
-        st.caption(
-            "Each circle is an article. Vertical clusters mean multiple outlets published simultaneously — a likely news event.")
-        horizon_chart = build_news_horizon_chart(news)
-        if horizon_chart is None:
-            st.info("No news data available to render this chart.")
-        else:
-            st.altair_chart(horizon_chart, use_container_width=True)
-
-
-def get_company_summary(ticker: str, company_name: str) -> str:
-    """Calls RAG to get plain english summary of a specific stock"""
-    payload = {
-        "question": f"Generate a summary for {company_name} ({ticker}) including recent price context, news, and sentiment.",
-        "ticker": ticker
-    }
-
-    response = requests.post(RAG_API_URL, json=payload, timeout=30)
-    return response.json().get("answer", "No summary returned.")
+            "Aggregate sentiment for each source at a glance. Green = positive · Amber = neutral · Red = negative. "
+            "Divergence between News and Reddit may signal institutional vs retail disagreement.")
+        indicator_chart = build_sentiment_indicator_row(news, social, history)
+        st.altair_chart(indicator_chart, use_container_width=True)

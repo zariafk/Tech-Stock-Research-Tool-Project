@@ -30,7 +30,7 @@ MARKET_HISTORY_QUERY = """
 
 NEWS_SIGNALS_QUERY = """
     SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
-           rss.title, rss.summary, rss.published_date, rss.source
+           rss.title, rss.url, rss.summary, rss.published_date, rss.source
     FROM rss_analysis ra
     JOIN rss_article rss
       ON ra.story_id = rss.story_id

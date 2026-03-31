@@ -22,7 +22,7 @@ def dashboard():
     # Tabs
     # ---------------------------------------------------------------------------
     tab_market, tab_ticker, tab_chatbot = st.tabs(
-        ["Market Data", "Company Specific", "Chatbot"])
+        ["Market Data", "Search Company", "Chatbot"])
 
     # ── Tab 1: Market Data ──────────────────────────────────────────────────────────────
     with tab_market:

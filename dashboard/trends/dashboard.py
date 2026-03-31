@@ -51,7 +51,7 @@ def get_connection():
         )
 
     # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["DB_SECRET_NAME"])
+    secret = get_secret(os.environ["secrets_repo_name"])
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),

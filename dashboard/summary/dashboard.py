@@ -33,7 +33,7 @@ from .helpers import (
 
 load_dotenv()
 
-SECRETS_REPO = "c22-trade-research-tool-secrets"
+SECRETS_REPO = os.environ["secrets_repo_name"]
 
 
 # ---------------------------------------------------------------------------

@@ -364,3 +364,13 @@ def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFram
             "Divergence between News and Reddit may signal institutional vs retail disagreement.")
         indicator_chart = build_sentiment_indicator_row(news, social, history)
         st.altair_chart(indicator_chart, use_container_width=True)
+
+
+def get_company_summary(ticker: str, company_name: str) -> str:
+    """Calls RAG to get plain english summary of a specific stock"""
+    payload = {
+        "question": f"Generate a summary for {company_name} ({ticker}) including recent price context, news, and sentiment.",
+        "ticker": ticker
+    }
+    response = requests.post(RAG_API_URL, json=payload, timeout=30)
+    return response.json().get("answer", "No summary returned.")

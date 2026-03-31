@@ -8,47 +8,47 @@ import pandas as pd
 import altair as alt
 
 
-# def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-#     """
-#     Builds a scatter plot of comments vs sentiment with relevance as color.
+def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
+    """
+    Builds a scatter plot of comments vs sentiment with relevance as color.
 
-#     Args:
-#         social (pd.DataFrame): Reddit data with sentiment, relevance, and engagement metrics.
+    Args:
+        social (pd.DataFrame): Reddit data with sentiment, relevance, and engagement metrics.
 
-#     Returns:
-#         alt.LayerChart | None: Altair chart object or None if data is empty.
-#     """
-#     if social.empty:
-#         return None
+    Returns:
+        alt.LayerChart | None: Altair chart object or None if data is empty.
+    """
+    if social.empty:
+        return None
 
-#     zero_rule = (
-#         alt.Chart(pd.DataFrame({"x": [0]}))
-#         .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
-#         .encode(x="x:Q")
-#     )
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
+        .encode(x="x:Q")
+    )
 
-#     scatter = (
-#         alt.Chart(social)
-#         .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
-#         .encode(
-#             x=alt.X("sentiment_score:Q", title="Sentiment Score",
-#                     scale=alt.Scale(domain=[-1.2, 1.2])),
-#             y=alt.Y("num_comments:Q", title="Comments"),
-#             color=alt.Color("relevance_score:Q", scale=alt.Scale(
-#                 scheme="viridis"), title="Relevance"),
-#             size=alt.Size("ups:Q", scale=alt.Scale(
-#                 range=[40, 600]), title="Upvotes"),
-#             tooltip=[
-#                 "title:N",
-#                 alt.Tooltip("sentiment_score:Q", format=".2f"),
-#                 "num_comments:Q",
-#                 "ups:Q",
-#                 alt.Tooltip("relevance_score:Q", format=".2f"),
-#             ],
-#         )
-#     )
+    scatter = (
+        alt.Chart(social)
+        .mark_circle(opacity=0.75, stroke="white", strokeWidth=0.5)
+        .encode(
+            x=alt.X("sentiment_score:Q", title="Sentiment Score",
+                    scale=alt.Scale(domain=[-1.2, 1.2])),
+            y=alt.Y("num_comments:Q", title="Comments"),
+            color=alt.Color("relevance_score:Q", scale=alt.Scale(
+                scheme="viridis"), title="Relevance"),
+            size=alt.Size("ups:Q", scale=alt.Scale(
+                range=[40, 600]), title="Upvotes"),
+            tooltip=[
+                "title:N",
+                alt.Tooltip("sentiment_score:Q", format=".2f"),
+                "num_comments:Q",
+                "ups:Q",
+                alt.Tooltip("relevance_score:Q", format=".2f"),
+            ],
+        )
+    )
 
-#     return (zero_rule + scatter)
+    return (zero_rule + scatter)
 
 
 def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> tuple[alt.Chart, pd.DataFrame] | tuple[None, None]:

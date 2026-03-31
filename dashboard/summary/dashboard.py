@@ -233,8 +233,6 @@ def dashboard():
     st.caption(
         "_Dashboard updated with live data from RDS. Refresh to see latest signals._")
 
-    render_chatbot(ticker, company_name)
-
 
 if __name__ == "__main__":
     dashboard()

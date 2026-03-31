@@ -46,46 +46,6 @@ def format_price(val: float | None) -> str:
     return f"${val:,.2f}" if val else "N/A"
 
 
-# def render_market_section(latest: pd.DataFrame, history: pd.DataFrame, cutoff_date: pd.Timestamp):
-#     """Render live price metrics and short-term trend context."""
-#     if latest.empty:
-#         st.warning("No market data available for this stock.")
-#         return
-
-#     row = latest.iloc[0]
-#     price = row["close"]
-#     open_price = row["open"]
-
-#     change = price - open_price
-#     change_pct = (change / open_price * 100) if open_price else 0
-
-#     col1, col2, col3, col4 = st.columns(4)
-#     with col1:
-#         st.metric("Current Price", format_price(price), f"{change:+.2f}")
-#     with col2:
-#         st.metric(
-#             "Today's Range",
-#             f"{format_price(row['low'])} - {format_price(row['high'])}",
-#             delta=format_price(row["high"] - row["low"]),
-#         )
-#     with col3:
-#         volume = row["volume"]
-#         st.metric("Volume", f"{volume / 1e3:.1f}K" if volume else "N/A")
-
-#     direction = "up" if change >= 0 else "down"
-#     st.caption(f"📈 Price {direction} {abs(change_pct):.2f}% from open")
-
-#     min_history_rows = 5
-#     if history.shape[0] >= min_history_rows:
-#         recent_closes = history["close"].head(min_history_rows).tolist()
-#         if recent_closes[0] > recent_closes[-1]:
-#             trend_msg = "**Uptrend.** Recent prices are rising."
-#         elif recent_closes[0] < recent_closes[-1]:
-#             trend_msg = "**Downtrend.** Recent prices are falling."
-#         else:
-#             trend_msg = "**Sideways.** Prices are stable."
-#         st.info(f"📊 Trend: {trend_msg}")
-
 def format_volume(value: float | None) -> str:
     """Format volume in a readable way."""
     if value is None or pd.isna(value) or value == 0:
@@ -98,70 +58,6 @@ def format_volume(value: float | None) -> str:
         return f"{value / 1_000:.1f}K"
     return f"{int(value):,}"
 
-
-# def render_market_section(latest: pd.DataFrame, history: pd.DataFrame, time_label: str):
-#     """Render live price plus selected-period range, volume, and trend."""
-#     if latest.empty:
-#         st.warning("No market data available for this stock.")
-#         return
-
-#     row = latest.iloc[0]
-#     price = row["close"]
-#     open_price = row["open"]
-#     latest_time = row.get("latest_time")
-
-#     change = price - open_price
-#     change_pct = (change / open_price * 100) if open_price else 0
-
-#     if not history.empty:
-#         history = history.copy()
-#         history["bar_date"] = pd.to_datetime(history["bar_date"])
-#         history = history.sort_values("bar_date")
-
-#         period_low = history["low"].min()
-#         period_high = history["high"].max()
-#         period_volume = history["volume"].sum()
-
-#         if len(history) >= 5:
-#             recent_closes = history["close"].tail(5).tolist()
-
-#             if recent_closes[-1] > recent_closes[0]:
-#                 trend_msg = "**Uptrend.** Recent prices are rising."
-#             elif recent_closes[-1] < recent_closes[0]:
-#                 trend_msg = "**Downtrend.** Recent prices are falling."
-#             else:
-#                 trend_msg = "**Sideways.** Prices are stable."
-
-#     col1, col2, col3, col4 = st.columns(4)
-
-#     with col1:
-#         st.metric("Current Price", format_price(price), f"{change:+.2f}")
-
-#     with col2:
-#         if period_low is not None and period_high is not None:
-
-#             formatted_low = format_price(period_low).replace("$", r"\$")
-
-#             formatted_high = format_price(period_high).replace("$", r"\$")
-#             formatted_change = format_price(
-#                 period_high - period_low).replace("$", r"\$")
-
-#             st.metric(
-#                 f"{time_label} Range",
-#                 f"{formatted_low} - {formatted_high}",
-#                 delta=formatted_change,
-#             )
-#         else:
-#             st.metric(f"{time_label} Range", "N/A")
-
-#     with col3:
-#         st.metric(f"{time_label} Volume", format_volume(period_volume))
-
-#     direction = "up" if change >= 0 else "down"
-#     st.caption(f"📈 Live price {direction} {abs(change_pct):.2f}% from open")
-
-#     if trend_msg is not None:
-#         st.info(f"📊 Trend: {trend_msg}")
 
 def summarise_history(history: pd.DataFrame) -> dict:
     """Return selected-period summary stats from filtered history."""

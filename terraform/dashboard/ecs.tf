@@ -124,7 +124,7 @@ resource "aws_ecs_service" "c22_stocksiphon_dashboard_service" {
   name            = "c22-stocksiphon-dashboard-service"
   cluster         = aws_ecs_cluster.c22_stocksiphon_cluster.id
   task_definition = aws_ecs_task_definition.c22_stocksiphon_dashboard_task.arn
-  desired_count   = 0
+  desired_count   = 1
   launch_type     = "FARGATE"
 
   network_configuration {

@@ -23,4 +23,3 @@ variable "secrets_repo_name" {
   type        = string
   sensitive   = true
 }
-

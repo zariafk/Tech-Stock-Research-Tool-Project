@@ -27,9 +27,11 @@ from .helpers import (
     render_news_section,
     render_social_section,
     render_divergence_section,
+    get_company_summary,
     render_summary_analytics,
     TIME_OPTIONS
 )
+from chatbot import render_chatbot
 
 load_dotenv()
 
@@ -230,6 +232,8 @@ def dashboard():
 
     st.caption(
         "_Dashboard updated with live data from RDS. Refresh to see latest signals._")
+
+    render_chatbot(ticker, company_name)
 
 
 if __name__ == "__main__":

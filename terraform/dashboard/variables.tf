@@ -17,3 +17,9 @@ variable "vpc_id" {
   description = "VPC ID for the security group"
   type        = string
 }
+
+variable "secrets_repo_name" {
+  description = "Name of the AWS Secrets Manager repository for storing sensitive information"
+  type        = string
+  sensitive   = true
+}

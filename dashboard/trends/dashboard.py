@@ -141,6 +141,8 @@ def dashboard():
     else:
         render_return_volatility_section(metrics_df, period_short_label)
 
+    st.divider()
+
     # ── Market Data ──────────────────────────────────────────────────────────────
 
     try:

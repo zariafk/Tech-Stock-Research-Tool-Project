@@ -11,7 +11,6 @@ from .charts import (
     build_sentiment_momentum_chart,
     build_engagement_scatter_chart,
     build_news_horizon_chart,
-    build_comments_vs_sentiment_chart,
 )
 
 
@@ -197,10 +196,9 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
     st.caption(
         "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
 
-    va_tab1, va_tab2, va_tab3, va_tab4, va_tab5 = st.tabs([
+    va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
         "📌 Signal Convergence",
         "📈 Sentiment Momentum",
-        "📊 Engagement Matrix",
         "💬 Comments vs Sentiment",
         "📰 News Horizon",
     ])
@@ -255,17 +253,17 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
             st.altair_chart(scatter_chart, use_container_width=True)
             st.caption("Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
 
-    with va_tab4:
-        st.subheader("Comments vs. Sentiment")
-        st.caption(
-            "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
-        comments_chart = build_comments_vs_sentiment_chart(extended_social)
-        if comments_chart is None:
-            st.info("No Reddit data available.")
-        else:
-            st.altair_chart(comments_chart, use_container_width=True)
+    # with va_tab4:
+    #     st.subheader("Comments vs. Sentiment")
+    #     st.caption(
+    #         "High comments + negative sentiment (top-left) = heated bearish debate. Bubble size = upvotes.")
+    #     comments_chart = build_comments_vs_sentiment_chart(extended_social)
+    #     if comments_chart is None:
+    #         st.info("No Reddit data available.")
+    #     else:
+    #         st.altair_chart(comments_chart, use_container_width=True)
 
-    with va_tab5:
+    with va_tab4:
         st.subheader("News Coverage Density")
         st.caption(
             "Each circle is an article. Vertical clusters mean multiple outlets published simultaneously — a likely news event.")

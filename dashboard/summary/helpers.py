@@ -13,7 +13,8 @@ from .charts import (
     build_news_horizon_chart,
     build_comments_vs_sentiment_chart,
 )
-
+import os
+import requests
 
 CONFIDENCE_EMOJI: dict[str, str] = {
     "High": "✅",
@@ -21,6 +22,8 @@ CONFIDENCE_EMOJI: dict[str, str] = {
     "Low": "❌",
     "Unknown": "❓",
 }
+
+RAG_API_URL = os.environ["RAG_API_URL"]
 
 
 def classify_sentiment(score: float | None) -> tuple[str, str]:
@@ -274,3 +277,14 @@ def render_visual_analytics(history: pd.DataFrame, extended_social: pd.DataFrame
             st.info("No news data available to render this chart.")
         else:
             st.altair_chart(horizon_chart, use_container_width=True)
+
+
+def get_company_summary(ticker: str, company_name: str) -> str:
+    """Calls RAG to get plain english summary of a specific stock"""
+    payload = {
+        "question": f"Generate a summary for {company_name} ({ticker}) including recent price context, news, and sentiment.",
+        "ticker": ticker
+    }
+
+    response = requests.post(RAG_API_URL, json=payload, timeout=30)
+    return response.json().get("answer", "No summary returned.")

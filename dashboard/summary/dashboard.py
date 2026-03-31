@@ -28,6 +28,7 @@ from .helpers import (
     render_social_section,
     render_divergence_section,
     render_visual_analytics,
+    TIME_OPTIONS
 )
 
 load_dotenv()
@@ -96,40 +97,60 @@ def fetch_stock_by_ticker_or_name(_conn, search_term: str) -> tuple | None:
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching market data...")
-def fetch_market_data(_conn, stock_id: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fetch latest market data and 30-day historical trend. Returns (latest_df, history_df)."""
+def fetch_market_data(_conn, stock_id: int, cutoff_date) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fetch latest market data and filtered historical trend."""
     latest = pd.read_sql(MARKET_LATEST_QUERY, _conn, params=(stock_id,))
-    history = pd.read_sql(MARKET_HISTORY_QUERY, _conn, params=(stock_id,))
+    history = pd.read_sql(
+        MARKET_HISTORY_QUERY,
+        _conn,
+        params=(stock_id, cutoff_date, cutoff_date)
+    )
     return latest, history
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching news signals...")
-def fetch_news_signals(_conn, stock_id: int) -> pd.DataFrame:
+def fetch_news_signals(_conn, stock_id: int, cutoff_date) -> pd.DataFrame:
     """Fetch RSS news articles with sentiment and relevance scores."""
-    return pd.read_sql(NEWS_SIGNALS_QUERY, _conn, params=(stock_id,))
+    return pd.read_sql(
+        NEWS_SIGNALS_QUERY,
+        _conn,
+        params=(stock_id, cutoff_date, cutoff_date)
+    )
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching social signals...")
-def fetch_social_signals(_conn, stock_id: int) -> pd.DataFrame:
+def fetch_social_signals(_conn, stock_id: int, cutoff_date) -> pd.DataFrame:
     """Fetch Reddit posts with sentiment and relevance scores."""
-    return pd.read_sql(SOCIAL_SIGNALS_QUERY, _conn, params=(stock_id,))
+    return pd.read_sql(
+        SOCIAL_SIGNALS_QUERY,
+        _conn,
+        params=(stock_id, cutoff_date, cutoff_date)
+    )
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching extended social data...")
-def fetch_extended_social(_conn, stock_id: int) -> pd.DataFrame:
-    """Fetch Reddit posts with full engagement data for chart rendering (200 most recent)."""
-    return pd.read_sql(EXTENDED_SOCIAL_QUERY, _conn, params=(stock_id,))
+def fetch_extended_social(_conn, stock_id: int, cutoff_date) -> pd.DataFrame:
+    """Fetch Reddit posts with full engagement data for chart rendering."""
+    return pd.read_sql(
+        EXTENDED_SOCIAL_QUERY,
+        _conn,
+        params=(stock_id, cutoff_date, cutoff_date)
+    )
 
 
 @st.cache_data(ttl=1200, show_spinner="Fetching full market history...")
-def fetch_full_market_history(_conn, stock_id: int) -> pd.DataFrame:
-    """Fetch up to 365 days of price history for technical indicator computation."""
-    return pd.read_sql(FULL_MARKET_HISTORY_QUERY, _conn, params=(stock_id,))
-
-
+def fetch_full_market_history(_conn, stock_id: int, cutoff_date) -> pd.DataFrame:
+    """Fetch filtered price history for technical indicator computation."""
+    return pd.read_sql(
+        FULL_MARKET_HISTORY_QUERY,
+        _conn,
+        params=(stock_id, cutoff_date, cutoff_date)
+    )
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
+
+
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""
     st.caption(
@@ -162,10 +183,27 @@ def dashboard():
     stock_id, ticker, company_name = stock_result
     st.divider()
 
-    latest, history = fetch_market_data(conn, stock_id)
-    news = fetch_news_signals(conn, stock_id)
-    social = fetch_social_signals(conn, stock_id)
-    extended_social = fetch_extended_social(conn, stock_id)
+    time_label = st.radio(
+        "Time Range",
+        list(TIME_OPTIONS.keys()),
+        horizontal=True,
+        key=f"trends_time_range_{ticker}",
+    )
+    time_days = TIME_OPTIONS[time_label]
+
+    if time_days is None:
+        cutoff_date = None
+    else:
+        cutoff_date = (
+            pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
+        ).date()
+
+    st.divider()
+
+    latest, history = fetch_market_data(conn, stock_id, cutoff_date)
+    news = fetch_news_signals(conn, stock_id, cutoff_date)
+    social = fetch_social_signals(conn, stock_id, cutoff_date)
+    extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
     st.header(f"Market Data — {ticker} ({company_name})")
     render_market_section(latest, history)

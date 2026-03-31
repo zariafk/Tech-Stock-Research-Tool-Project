@@ -16,6 +16,14 @@ from .charts import (
 import os
 import requests
 
+TIME_OPTIONS: dict[str, int | None] = {
+    "1 Month":    30,
+    "3 Months":   90,
+    "6 Months":   180,
+    "1 Year":     365,
+    "From Start": None,
+}
+
 CONFIDENCE_EMOJI: dict[str, str] = {
     "High": "✅",
     "Medium": "⚠️",
@@ -65,10 +73,7 @@ def render_market_section(latest: pd.DataFrame, history: pd.DataFrame):
         )
     with col3:
         volume = row["volume"]
-        st.metric("Volume", f"{volume / 1e6:.1f}M" if volume else "N/A")
-    with col4:
-        ts = row["latest_time"]
-        st.metric("As of", ts.strftime("%I:%M %p") if ts else "N/A")
+        st.metric("Volume", f"{volume / 1e3:.1f}K" if volume else "N/A")
 
     direction = "up" if change >= 0 else "down"
     st.caption(f"📈 Price {direction} {abs(change_pct):.2f}% from open")
@@ -150,8 +155,6 @@ def render_social_section(social: pd.DataFrame):
         st.metric("Total Comments", f"{social['num_comments'].sum():,}")
     with col3:
         st.metric("Top Posts Tracked", len(social))
-    with col4:
-        st.metric("Engagement Velocity", f"{engagement_velocity:.2f} sec/post")
 
     if positive_count > negative_count:
         summary = f"**Community is bullish.** {positive_count} positive vs {negative_count} negative discussions."

@@ -147,12 +147,21 @@ def build_scatter_points(plot_df: pd.DataFrame, period_short_label: str, selecte
     """Build scatter points encoded with return, volatility, and colour by return."""
     return (
         alt.Chart(plot_df)
-        .mark_circle(stroke="white", strokeWidth=1)
+        .mark_circle(stroke="white", strokeWidth=1.5)
         .encode(
-            x=alt.X("volatility_pct:Q", title="%s Volatility (%%" %
+            x=alt.X(
+                "volatility_pct:Q",
+                title="%s Volatility (%%)" % period_short_label + ")",
+                scale=alt.Scale(zero=True, nice=True),
+            ),
+            y=alt.Y("return_pct:Q", title="%s Return (%%)" %
                     period_short_label + ")"),
-            y=alt.Y("return_pct:Q", title="%s Return (%%" %
-                    period_short_label + ")"),
+            size=alt.Size(
+                "abs_return:Q",
+                title="Absolute Return %",
+                scale=alt.Scale(range=[120, 800]),
+                legend=None,
+            ),
             color=alt.Color(
                 "return_pct:Q",
                 title="Return %",
@@ -193,7 +202,7 @@ def apply_chart_styling(chart: alt.Chart, period_short_label: str) -> alt.Chart:
     """Apply consistent dark-theme axis and title styling to the scatter chart."""
     return (
         chart
-        .properties(title="Return vs Volatility (%s)" % period_short_label, height=560)
+        .properties(title="Return vs Volatility (%s)" % period_short_label, height=620)
         .configure_view(strokeOpacity=0)
         .configure_axis(labelColor="#E5E7EB", titleColor="#E5E7EB", gridColor="#253041")
         .configure_legend(labelColor="#E5E7EB", titleColor="#E5E7EB")

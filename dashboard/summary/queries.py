@@ -18,47 +18,57 @@ MARKET_LATEST_QUERY = """
     ORDER BY latest_time DESC LIMIT 1
 """
 
+
 MARKET_HISTORY_QUERY = """
-    SELECT bar_date, open, high, low, close, volume FROM alpaca_history
+    SELECT bar_date, open, high, low, close, volume
+    FROM alpaca_history
     WHERE stock_id = %s
-    ORDER BY bar_date DESC LIMIT 30
+      AND (%s IS NULL OR bar_date >= %s)
+    ORDER BY bar_date DESC
 """
 
-# News signals query
+
 NEWS_SIGNALS_QUERY = """
     SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
            rss.title, rss.summary, rss.published_date, rss.source
     FROM rss_analysis ra
-    JOIN rss_article rss ON ra.story_id = rss.story_id
+    JOIN rss_article rss
+      ON ra.story_id = rss.story_id
     WHERE ra.stock_id = %s
-    ORDER BY rss.published_date DESC LIMIT 20
+      AND (%s IS NULL OR rss.published_date >= %s)
+    ORDER BY rss.published_date DESC
 """
 
-# Social signals query
+
 SOCIAL_SIGNALS_QUERY = """
     SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
            rp.title, rp.score, rp.num_comments, rp.created_at, rp.url
     FROM reddit_analysis ra
-    JOIN reddit_post rp ON ra.story_id = rp.post_id
+    JOIN reddit_post rp
+      ON ra.story_id = rp.post_id
     WHERE ra.stock_id = %s
-    ORDER BY rp.created_at DESC LIMIT 20
+      AND (%s IS NULL OR rp.created_at >= %s)
+    ORDER BY rp.created_at DESC
 """
 
-# Extended social query
+
 EXTENDED_SOCIAL_QUERY = """
     SELECT ra.sentiment_score, ra.relevance_score, ra.confidence, ra.analysis,
            rp.post_id, rp.title, rp.contents, rp.score, rp.ups,
            rp.upvote_ratio, rp.num_comments, rp.created_at
     FROM reddit_analysis ra
-    JOIN reddit_post rp ON ra.story_id = rp.post_id
+    JOIN reddit_post rp
+      ON ra.story_id = rp.post_id
     WHERE ra.stock_id = %s
-    ORDER BY rp.created_at DESC LIMIT 200
+      AND (%s IS NULL OR rp.created_at >= %s)
+    ORDER BY rp.created_at DESC
 """
 
-# Full market history query
+
 FULL_MARKET_HISTORY_QUERY = """
     SELECT bar_date, open, high, low, close, volume, trade_count, vwap
     FROM alpaca_history
     WHERE stock_id = %s
-    ORDER BY bar_date ASC LIMIT 365
+      AND (%s IS NULL OR bar_date >= %s)
+    ORDER BY bar_date ASC
 """

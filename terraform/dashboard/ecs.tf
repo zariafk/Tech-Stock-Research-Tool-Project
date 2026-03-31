@@ -125,7 +125,7 @@ resource "aws_ecs_task_definition" "c22_stocksiphon_dashboard_task" {
     }]
     environment = [
       {
-        name  = "STREAMLIT_SERVER_PORT"
+        name  = "SECRETS_REPO_NAME"
         value = var.secrets_repo_name
       }
     ]

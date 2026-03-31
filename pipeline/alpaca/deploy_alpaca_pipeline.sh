@@ -3,7 +3,7 @@ set -e
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-2"
-REPO_NAME=c22-stocksiphon-dashboard-ecr
+REPO_NAME="c22-stocksiphon-alpaca-ecr"
 TAG="latest"
 
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}"

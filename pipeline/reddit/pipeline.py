@@ -12,6 +12,7 @@ from transform import transform_main
 from analysis import analyse_posts
 from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json, get_stock_id_map, build_story_stock_df
 
+from rag_ingest_invoke import invoke_rag_ingest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -97,6 +98,12 @@ def run_pipeline() -> None:
 
         result = join_tables_to_json(
             fact_posts, dim_subreddits, fact_post_tickers)
+
+        if result:
+            logger.info("Invoking RAG ingest with %d posts",
+                        len(result["rag_dict"]))
+            invoke_rag_ingest(source="reddit", data=result["rag_dict"])
+        logger.info("RAG ingest invoked successfully")
 
         logger.info("Starting load")
 

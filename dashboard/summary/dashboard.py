@@ -184,10 +184,6 @@ def combine_ticker_data(
 
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""
-    st.caption(
-        "Consolidated view of market data, news signals, and community sentiment for specific stocks."
-    )
-    st.divider()
 
     # filter input
     with st.container(border=True):

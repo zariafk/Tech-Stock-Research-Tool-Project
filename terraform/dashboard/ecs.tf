@@ -113,6 +113,10 @@ resource "aws_ecs_task_definition" "c22_stocksiphon_dashboard_task" {
       {
         name  = "STREAMLIT_SERVER_PORT"
         value = var.secrets_repo_name
+      },
+      {
+        name  = "RAG_API_URL"
+        value = var.rag_api_url
       }
     ]
     logConfiguration = {

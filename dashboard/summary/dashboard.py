@@ -240,73 +240,80 @@ def dashboard():
     social = fetch_social_signals(conn, stock_id, cutoff_date)
     extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
-    st.header(f"Market Data — {ticker} ({company_name})")
+    tab_market, tab_news, tab_reddit = st.tabs([
+        "📈 Market Data",
+        "📰 News",
+        "💬 Reddit",
+    ])
 
-    render_market_section(latest, history, time_label)
+    with tab_market:
+        st.header(f"Market Data — {ticker} ({company_name})")
+        render_market_section(latest, history, time_label)
+        st.divider()
+
+        compare_input = st.text_input(
+            "Compare with another ticker (optional)",
+            placeholder="e.g. MSFT",
+            key=f"compare_ticker_{ticker}",
+        )
+
+        compare_result = None
+        compare_ticker = None
+        compare_history = pd.DataFrame()
+        compare_extended_social = pd.DataFrame()
+        compare_social = pd.DataFrame()
+        compare_news = pd.DataFrame()
+
+        if compare_input.strip():
+            compare_result = fetch_stock_by_ticker_or_name(
+                conn, compare_input.strip())
+
+            if compare_result:
+                compare_stock_id, compare_ticker, _ = compare_result
+                _, compare_history = fetch_market_data(
+                    conn, compare_stock_id, cutoff_date)
+                compare_extended_social = fetch_extended_social(
+                    conn, compare_stock_id, cutoff_date
+                )
+                compare_social = fetch_social_signals(
+                    conn, compare_stock_id, cutoff_date
+                )
+                compare_news = fetch_news_signals(
+                    conn, compare_stock_id, cutoff_date
+                )
+            else:
+                st.warning("Comparison ticker not found.")
+
+        combined_history = combine_ticker_data(
+            history, compare_history, ticker, compare_ticker
+        )
+        combined_extended_social = combine_ticker_data(
+            extended_social, compare_extended_social, ticker, compare_ticker
+        )
+        combined_social = combine_ticker_data(
+            social, compare_social, ticker, compare_ticker
+        )
+        combined_news = combine_ticker_data(
+            news, compare_news, ticker, compare_ticker
+        )
+
+        render_summary_analytics(
+            combined_history,
+            combined_extended_social,
+            combined_social,
+            combined_news,
+        )
+
+    with tab_news:
+        st.header("News & Market Signals")
+        render_news_section(news)
+
+    with tab_reddit:
+        st.header("Community Sentiment")
+        render_social_section(social)
+        render_divergence_section(news, social)
+
     st.divider()
-
-    compare_input = st.text_input(
-        "Compare with another ticker (optional)",
-        placeholder="e.g. MSFT",
-        key=f"compare_ticker_{ticker}",
-    )
-
-    compare_result = None
-    compare_ticker = None
-    compare_history = pd.DataFrame()
-    compare_extended_social = pd.DataFrame()
-    compare_social = pd.DataFrame()
-    compare_news = pd.DataFrame()
-
-    if compare_input.strip():
-        compare_result = fetch_stock_by_ticker_or_name(
-            conn, compare_input.strip())
-
-        if compare_result:
-            compare_stock_id, compare_ticker, _ = compare_result
-            _, compare_history = fetch_market_data(
-                conn, compare_stock_id, cutoff_date)
-            compare_extended_social = fetch_extended_social(
-                conn, compare_stock_id, cutoff_date
-            )
-            compare_social = fetch_social_signals(
-                conn, compare_stock_id, cutoff_date
-            )
-            compare_news = fetch_news_signals(
-                conn, compare_stock_id, cutoff_date
-            )
-        else:
-            st.warning("Comparison ticker not found.")
-
-    combined_history = combine_ticker_data(
-        history, compare_history, ticker, compare_ticker
-    )
-    combined_extended_social = combine_ticker_data(
-        extended_social, compare_extended_social, ticker, compare_ticker
-    )
-    combined_social = combine_ticker_data(
-        social, compare_social, ticker, compare_ticker
-    )
-    combined_news = combine_ticker_data(
-        news, compare_news, ticker, compare_ticker
-    )
-
-    render_summary_analytics(
-        combined_history,
-        combined_extended_social,
-        combined_social,
-        combined_news,
-    )
-
-    st.header("News & Market Signals")
-    render_news_section(news)
-    st.divider()
-
-    st.header("Community Sentiment")
-    render_social_section(social)
-    render_divergence_section(news, social)
-    st.divider()
-
     st.caption(
         "_Dashboard updated with live data from RDS. Refresh to see latest signals._"
     )

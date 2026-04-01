@@ -312,7 +312,7 @@ def render_summary_analytics(
         st.caption(f"Comparison mode: {compared_tickers}")
 
     va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
-        "📌 Signal Convergence",
+        "📌 Reddit and Price Correlation",
         "📈 Sentiment Momentum",
         "💬 Comments vs Sentiment",
         "💭 Sources Sentiment Overview",

@@ -53,7 +53,7 @@ jobs:
           ECR_REPOSITORY: ${{ matrix.service.ecr_repo }} 
           IMAGE_TAG: ${{ github.sha }} 
         run: |
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || \ 
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || \
           aws ecr create-repository --repository-name $ECR_REPOSITORY
 
           docker build \

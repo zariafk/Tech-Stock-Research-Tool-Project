@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - feature/continuous_deployment_yml_script
 
 jobs:
   deploy:

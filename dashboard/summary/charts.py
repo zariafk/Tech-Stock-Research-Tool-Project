@@ -9,23 +9,35 @@ import altair as alt
 
 
 def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """
-    Builds a scatter plot of comments vs sentiment with relevance as color.
-
-    Args:
-        social (pd.DataFrame): Reddit data with sentiment, relevance, and engagement metrics.
-
-    Returns:
-        alt.LayerChart | None: Altair chart object or None if data is empty.
-    """
+    """Build comments vs sentiment scatter, with optional ticker comparison."""
     if social.empty:
         return None
+
+    multi_ticker = "ticker" in social.columns and social["ticker"].nunique(
+    ) > 1
 
     zero_rule = (
         alt.Chart(pd.DataFrame({"x": [0]}))
         .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.6)
         .encode(x="x:Q")
     )
+
+    color_encoding = (
+        alt.Color("ticker:N", title="Ticker")
+        if multi_ticker
+        else alt.Color("relevance_score:Q", scale=alt.Scale(scheme="viridis"), title="Relevance")
+    )
+
+    tooltip_fields = [
+        "title:N",
+        alt.Tooltip("sentiment_score:Q", format=".2f"),
+        "num_comments:Q",
+        "ups:Q",
+        alt.Tooltip("relevance_score:Q", format=".2f"),
+    ]
+
+    if multi_ticker:
+        tooltip_fields.insert(0, "ticker:N")
 
     scatter = (
         alt.Chart(social)
@@ -34,34 +46,21 @@ def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | 
             x=alt.X("sentiment_score:Q", title="Sentiment Score",
                     scale=alt.Scale(domain=[-1.2, 1.2])),
             y=alt.Y("num_comments:Q", title="Comments"),
-            color=alt.Color("relevance_score:Q", scale=alt.Scale(
-                scheme="viridis"), title="Relevance"),
+            color=color_encoding,
             size=alt.Size("ups:Q", scale=alt.Scale(
                 range=[40, 600]), title="Upvotes"),
-            tooltip=[
-                "title:N",
-                alt.Tooltip("sentiment_score:Q", format=".2f"),
-                "num_comments:Q",
-                "ups:Q",
-                alt.Tooltip("relevance_score:Q", format=".2f"),
-            ],
+            tooltip=tooltip_fields,
         )
     )
 
-    return (zero_rule + scatter)
+    return zero_rule + scatter
 
 
-def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) -> tuple[alt.Chart, pd.DataFrame] | tuple[None, None]:
-    """
-    Builds price line overlaid with Reddit sentiment dots.
-
-    Args:
-        history (pd.DataFrame): Market price history data.
-        social (pd.DataFrame): Reddit data with sentiment and relevance scores.
-
-    Returns:
-        tuple[alt.Chart, pd.DataFrame] | tuple[None, None]: Chart and merged data or (None, None).
-    """
+def build_signal_convergence_chart(
+    history: pd.DataFrame,
+    social: pd.DataFrame
+) -> tuple[alt.Chart, pd.DataFrame] | tuple[None, None]:
+    """Build price line with Reddit sentiment dots, with optional ticker comparison."""
     if history.empty or social.empty:
         return None, None
 
@@ -70,21 +69,40 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
 
     social = social.copy()
     social["date"] = pd.to_datetime(social["created_at"]).dt.normalize()
-    social_merged = social.merge(
-        history[["bar_date", "close"]], left_on="date", right_on="bar_date", how="inner"
-    )
 
-    if history.empty or social_merged.empty:
+    multi_ticker = "ticker" in history.columns and history["ticker"].nunique(
+    ) > 1
+
+    if multi_ticker:
+        social_merged = social.merge(
+            history[["ticker", "bar_date", "close"]],
+            left_on=["ticker", "date"],
+            right_on=["ticker", "bar_date"],
+            how="inner",
+        )
+    else:
+        social_merged = social.merge(
+            history[["bar_date", "close"]],
+            left_on="date",
+            right_on="bar_date",
+            how="inner",
+        )
+
+    if social_merged.empty:
         return None, None
 
-    selection = alt.selection_point(fields=["post_id"], name="convergence_sel")
+    selection_fields = ["post_id", "ticker"] if multi_ticker else ["post_id"]
+    selection = alt.selection_point(
+        fields=selection_fields, name="convergence_sel")
 
     price_line = (
         alt.Chart(history)
-        .mark_line(strokeWidth=2, color="#4A90D9")
+        .mark_line(strokeWidth=2)
         .encode(
             x=alt.X("bar_date:T", title="Date"),
             y=alt.Y("close:Q", title="Price ($)", scale=alt.Scale(zero=False)),
+            color=alt.Color(
+                "ticker:N", title="Ticker") if multi_ticker else alt.value("#4A90D9"),
         )
     )
 
@@ -101,8 +119,11 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
                 scale=alt.Scale(scheme="redyellowgreen", domain=[-1, 1]),
                 title="Sentiment",
             ),
+            shape=alt.Shape(
+                "ticker:N", title="Ticker") if multi_ticker else alt.value("circle"),
             opacity=alt.condition(selection, alt.value(1.0), alt.value(0.35)),
             tooltip=[
+                *(['ticker:N'] if multi_ticker else []),
                 "title:N",
                 alt.Tooltip("sentiment_score:Q", format=".2f"),
                 alt.Tooltip("relevance_score:Q", format=".2f"),
@@ -112,31 +133,68 @@ def build_signal_convergence_chart(history: pd.DataFrame, social: pd.DataFrame) 
         .add_params(selection)
     )
 
-    volume_bar = (
-        alt.Chart(history)
-        .mark_bar(color="#cbd5e0")
-        .encode(
-            x=alt.X("bar_date:T", axis=None),
-            y=alt.Y("volume:Q", title=None)
-        )
-        .properties(height=60)
-    )
-
     chart = (price_line + sentiment_dots).properties(height=350)
-    # chart = alt.concat(main_chart, volume_bar).resolve_scale(x='shared')
     return chart, social_merged
 
 
-def build_sentiment_momentum_chart(social: pd.DataFrame) -> alt.LayerChart | None:
-    """Builds a rolling 7-day sentiment area chart weighted by relevance score."""
+def build_sentiment_momentum_chart(social: pd.DataFrame) -> alt.Chart | None:
+    """Build rolling 7-day sentiment chart, with optional ticker comparison."""
     if social.empty or len(social) < 3:
         return None
 
-    daily = social.copy()
-    daily["date"] = pd.to_datetime(daily["created_at"]).dt.normalize()
-    daily["weighted"] = daily["sentiment_score"] * daily["relevance_score"]
+    social = social.copy()
+    social["date"] = pd.to_datetime(social["created_at"]).dt.normalize()
+    social["weighted"] = social["sentiment_score"] * social["relevance_score"]
+
+    multi_ticker = "ticker" in social.columns and social["ticker"].nunique(
+    ) > 1
+
+    zero_rule = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.7)
+        .encode(y="y:Q")
+    )
+
+    if multi_ticker:
+        daily = (
+            social.groupby(["ticker", "date"])
+            .agg(weighted_sum=("weighted", "sum"), relevance_sum=("relevance_score", "sum"))
+            .reset_index()
+        )
+        daily["daily_sentiment"] = daily["weighted_sum"] / \
+            daily["relevance_sum"].replace(0, float("nan"))
+        daily = daily.sort_values(["ticker", "date"])
+
+        frames = []
+        for ticker in daily["ticker"].unique():
+            ticker_df = daily[daily["ticker"] == ticker].copy()
+            ticker_df["rolling_sentiment"] = ticker_df["daily_sentiment"].rolling(
+                window=7, min_periods=1).mean()
+            frames.append(ticker_df)
+
+        plot_df = pd.concat(frames, ignore_index=True)
+
+        lines = (
+            alt.Chart(plot_df)
+            .mark_line(strokeWidth=2)
+            .encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("rolling_sentiment:Q",
+                        title="Weighted Sentiment (7d avg)"),
+                color=alt.Color("ticker:N", title="Ticker"),
+                tooltip=[
+                    "ticker:N",
+                    "date:T",
+                    alt.Tooltip("rolling_sentiment:Q", format=".3f",
+                                title="Rolling Sentiment"),
+                ],
+            )
+        )
+
+        return (zero_rule + lines).properties(height=220)
+
     daily = (
-        daily.groupby("date")
+        social.groupby("date")
         .agg(weighted_sum=("weighted", "sum"), relevance_sum=("relevance_score", "sum"))
         .reset_index()
     )
@@ -174,15 +232,12 @@ def build_sentiment_momentum_chart(social: pd.DataFrame) -> alt.LayerChart | Non
         .encode(
             x=alt.X("date:T"),
             y=alt.Y("rolling_sentiment:Q"),
-            tooltip=["date:T", alt.Tooltip(
-                "rolling_sentiment:Q", format=".3f", title="Rolling Sentiment")],
+            tooltip=[
+                "date:T",
+                alt.Tooltip("rolling_sentiment:Q", format=".3f",
+                            title="Rolling Sentiment"),
+            ],
         )
-    )
-
-    zero_rule = (
-        alt.Chart(pd.DataFrame({"y": [0]}))
-        .mark_rule(color="gray", strokeDash=[4, 4], opacity=0.7)
-        .encode(y="y:Q")
     )
 
     return (positive_area + negative_area + midline + zero_rule).properties(height=220)
@@ -289,62 +344,133 @@ def _market_price_change(history: pd.DataFrame) -> float:
 
 
 def build_sentiment_indicator_row(
-    news: pd.DataFrame, social: pd.DataFrame, history: pd.DataFrame
-) -> alt.LayerChart:
-    """Builds a compact three-indicator row: News · Reddit · Market, each coloured green/amber/red."""
-    news_score = _news_aggregate_score(news)
-    reddit_score = _reddit_aggregate_score(social)
-    market_change = _market_price_change(history)
+        news: pd.DataFrame, social: pd.DataFrame,
+        history: pd.DataFrame) -> alt.Chart:
+    """Build source sentiment indicators, with optional ticker comparison."""
 
-    indicators = pd.DataFrame({
-        "label": SIGNAL_SORT_ORDER,
-        "signal": [
-            _classify_signal(news_score),
-            _classify_signal(reddit_score),
-            _market_classify(market_change),
-        ],
-        "score": [round(news_score, 3), round(reddit_score, 3), round(market_change, 4)],
-        "y": [0, 0, 0],
-    })
+    multi_ticker = "ticker" in history.columns and history["ticker"].nunique(
+    ) > 1
 
-    shared_x = alt.X(
-        "label:N",
-        title=None,
-        sort=SIGNAL_SORT_ORDER,
-        axis=alt.Axis(labelAngle=0, ticks=False, domain=False,
-                      labelFontSize=15, labelFontWeight="bold"),
-    )
-    shared_color = alt.Color(
-        "signal:N",
-        scale=alt.Scale(domain=SIGNAL_DOMAIN, range=SIGNAL_COLORS),
-        legend=None,
-    )
-    shared_y = alt.Y("y:Q", axis=None, scale=alt.Scale(domain=[-1, 1]))
+    if not multi_ticker:
+        news_score = _news_aggregate_score(news)
+        reddit_score = _reddit_aggregate_score(social)
+        market_change = _market_price_change(history)
 
-    circles = (
+        indicators = pd.DataFrame({
+            "label": SIGNAL_SORT_ORDER,
+            "signal": [
+                _classify_signal(news_score),
+                _classify_signal(reddit_score),
+                _market_classify(market_change),
+            ],
+            "score": [round(news_score, 3), round(reddit_score, 3), round(market_change, 4)],
+            "y": [0, 0, 0],
+        })
+
+        shared_x = alt.X(
+            "label:N",
+            title=None,
+            sort=SIGNAL_SORT_ORDER,
+            axis=alt.Axis(labelAngle=0, ticks=False, domain=False,
+                          labelFontSize=15, labelFontWeight="bold"),
+        )
+        shared_color = alt.Color(
+            "signal:N",
+            scale=alt.Scale(domain=SIGNAL_DOMAIN, range=SIGNAL_COLORS),
+            legend=None,
+        )
+        shared_y = alt.Y("y:Q", axis=None, scale=alt.Scale(domain=[-1, 1]))
+
+        circles = (
+            alt.Chart(indicators)
+            .mark_circle(size=INDICATOR_CIRCLE_SIZE)
+            .encode(
+                x=shared_x,
+                y=shared_y,
+                color=shared_color,
+                tooltip=[
+                    alt.Tooltip("label:N", title="Source"),
+                    alt.Tooltip("signal:N", title="Signal"),
+                    alt.Tooltip("score:Q", format="+.3f", title="Score"),
+                ],
+            )
+        )
+
+        signal_text = (
+            alt.Chart(indicators)
+            .mark_text(dy=38, fontSize=12)
+            .encode(
+                x=alt.X("label:N", sort=SIGNAL_SORT_ORDER),
+                y=shared_y,
+                text=alt.Text("signal:N"),
+                color=shared_color,
+            )
+        )
+
+        return (circles + signal_text).properties(height=INDICATOR_ROW_HEIGHT)
+
+    rows = []
+    tickers = sorted(history["ticker"].dropna().unique().tolist())
+
+    for ticker in tickers:
+        news_slice = news[news["ticker"] == ticker]
+        social_slice = social[social["ticker"] == ticker]
+        history_slice = history[history["ticker"] == ticker]
+
+        news_score = _news_aggregate_score(news_slice)
+        reddit_score = _reddit_aggregate_score(social_slice)
+        market_change = _market_price_change(history_slice)
+
+        rows.extend([
+            {
+                "ticker": ticker,
+                "label": "News",
+                "signal": _classify_signal(news_score),
+                "score": round(news_score, 3),
+            },
+            {
+                "ticker": ticker,
+                "label": "Reddit",
+                "signal": _classify_signal(reddit_score),
+                "score": round(reddit_score, 3),
+            },
+            {
+                "ticker": ticker,
+                "label": "Market",
+                "signal": _market_classify(market_change),
+                "score": round(market_change, 4),
+            },
+        ])
+
+    indicators = pd.DataFrame(rows)
+
+    return (
         alt.Chart(indicators)
-        .mark_circle(size=INDICATOR_CIRCLE_SIZE)
+        .mark_circle(size=1300)
         .encode(
-            x=shared_x,
-            y=shared_y,
-            color=shared_color,
+            x=alt.X(
+                "label:N",
+                sort=SIGNAL_SORT_ORDER,
+                title=None,
+                axis=alt.Axis(labelAngle=0, labelFontSize=14,
+                              labelFontWeight="bold"),
+            ),
+            y=alt.Y(
+                "ticker:N",
+                title=None,
+                axis=alt.Axis(labelFontSize=13, labelFontWeight="bold"),
+            ),
+            color=alt.Color(
+                "signal:N",
+                scale=alt.Scale(domain=SIGNAL_DOMAIN, range=SIGNAL_COLORS),
+                legend=None,
+            ),
             tooltip=[
+                "ticker:N",
                 alt.Tooltip("label:N", title="Source"),
                 alt.Tooltip("signal:N", title="Signal"),
                 alt.Tooltip("score:Q", format="+.3f", title="Score"),
             ],
         )
+        .properties(height=160)
     )
-
-    signal_text = (
-        alt.Chart(indicators)
-        .mark_text(dy=38, fontSize=12)
-        .encode(
-            x=alt.X("label:N", sort=SIGNAL_SORT_ORDER),
-            y=shared_y,
-            text=alt.Text("signal:N"),
-            color=shared_color,
-        )
-    )
-
-    return (circles + signal_text).properties(height=INDICATOR_ROW_HEIGHT)

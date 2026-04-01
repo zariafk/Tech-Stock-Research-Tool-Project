@@ -148,26 +148,57 @@ def fetch_full_market_history(_conn, stock_id: int, cutoff_date) -> pd.DataFrame
         _conn,
         params=(stock_id, cutoff_date, cutoff_date)
     )
+
+# 2ND TICKER COMPARISON
+
+
+def add_ticker_label(dataframe: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Add ticker label to a dataframe."""
+    if dataframe.empty:
+        return pd.DataFrame()
+
+    dataframe = dataframe.copy()
+    dataframe["ticker"] = ticker
+    return dataframe
+
+
+def combine_ticker_data(
+    primary_df: pd.DataFrame,
+    compare_df: pd.DataFrame,
+    primary_ticker: str,
+    compare_ticker: str | None,
+) -> pd.DataFrame:
+    """Combine primary and optional comparison ticker data."""
+    frames = [add_ticker_label(primary_df, primary_ticker)]
+
+    if compare_ticker and not compare_df.empty:
+        frames.append(add_ticker_label(compare_df, compare_ticker))
+
+    frames = [frame for frame in frames if not frame.empty]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 
-
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""
     st.caption(
-        "Consolidated view of market data, news signals, and community sentiment for specific stocks.")
+        "Consolidated view of market data, news signals, and community sentiment for specific stocks."
+    )
     st.divider()
 
     with st.container(border=True):
-        # Search by company name or ticker
         col1, col2 = st.columns([3, 1])
+
         with col1:
             search_input = st.text_input(
                 "Search by ticker or company name",
                 placeholder="e.g., AAPL or Apple",
                 key="stock_search",
             )
+
         with col2:
             st.write("")
             search_btn = st.button("Search", use_container_width=True)
@@ -178,13 +209,14 @@ def dashboard():
         if not search_input:
             st.warning("Please enter a stock ticker or company name.")
             return
+
         stock_result = fetch_stock_by_ticker_or_name(conn, search_input)
         if not stock_result:
             st.error("Stock not found. Please check the ticker or company name.")
             return
 
         stock_id, ticker, company_name = stock_result
-        # Time range selection for filtering
+
         time_label = st.radio(
             "Time Range",
             list(TIME_OPTIONS.keys()),
@@ -193,12 +225,9 @@ def dashboard():
         )
         time_days = TIME_OPTIONS[time_label]
 
-        if time_days is None:
-            cutoff_date = None
-        else:
-            cutoff_date = (
-                pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
-            ).date()
+        cutoff_date = None if time_days is None else (
+            pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
+        ).date()
 
     st.divider()
 
@@ -208,18 +237,69 @@ def dashboard():
     extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
     st.header(f"Market Data — {ticker} ({company_name})")
+
     render_market_section(latest, history, time_label)
     st.divider()
 
     with st.expander("📊 Company Summary", expanded=True):
         with st.spinner("Generating summary..."):
             summary = get_company_summary(ticker, company_name)
-
         st.write(summary)
 
     st.divider()
 
-    render_summary_analytics(history, extended_social, social, news)
+    compare_input = st.text_input(
+        "Compare with another ticker (optional)",
+        placeholder="e.g. MSFT",
+        key=f"compare_ticker_{ticker}",
+    )
+
+    compare_result = None
+    compare_ticker = None
+    compare_history = pd.DataFrame()
+    compare_extended_social = pd.DataFrame()
+    compare_social = pd.DataFrame()
+    compare_news = pd.DataFrame()
+
+    if compare_input.strip():
+        compare_result = fetch_stock_by_ticker_or_name(
+            conn, compare_input.strip())
+
+        if compare_result:
+            compare_stock_id, compare_ticker, _ = compare_result
+            _, compare_history = fetch_market_data(
+                conn, compare_stock_id, cutoff_date)
+            compare_extended_social = fetch_extended_social(
+                conn, compare_stock_id, cutoff_date
+            )
+            compare_social = fetch_social_signals(
+                conn, compare_stock_id, cutoff_date
+            )
+            compare_news = fetch_news_signals(
+                conn, compare_stock_id, cutoff_date
+            )
+        else:
+            st.warning("Comparison ticker not found.")
+
+    combined_history = combine_ticker_data(
+        history, compare_history, ticker, compare_ticker
+    )
+    combined_extended_social = combine_ticker_data(
+        extended_social, compare_extended_social, ticker, compare_ticker
+    )
+    combined_social = combine_ticker_data(
+        social, compare_social, ticker, compare_ticker
+    )
+    combined_news = combine_ticker_data(
+        news, compare_news, ticker, compare_ticker
+    )
+
+    render_summary_analytics(
+        combined_history,
+        combined_extended_social,
+        combined_social,
+        combined_news,
+    )
 
     st.header("News & Market Signals")
     render_news_section(news)
@@ -231,7 +311,8 @@ def dashboard():
     st.divider()
 
     st.caption(
-        "_Dashboard updated with live data from RDS. Refresh to see latest signals._")
+        "_Dashboard updated with live data from RDS. Refresh to see latest signals._"
+    )
 
 
 if __name__ == "__main__":

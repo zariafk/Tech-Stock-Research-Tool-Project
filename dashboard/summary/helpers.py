@@ -11,6 +11,7 @@ from .charts import (
     build_sentiment_momentum_chart,
     build_engagement_scatter_chart,
     build_sentiment_indicator_row,
+    build_comments_vs_sentiment_chart
 )
 import os
 import requests
@@ -294,11 +295,21 @@ def render_divergence_section(news: pd.DataFrame, social: pd.DataFrame):
         )
 
 
-def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame):
+def render_summary_analytics(
+        history: pd.DataFrame, extended_social: pd.DataFrame,
+        social: pd.DataFrame, news: pd.DataFrame) -> None:
     """Render the Summary Analytics tab group with all interactive Altair charts."""
+
     st.header("Summary Analytics")
     st.caption(
         "Interactive charts. Hover for tooltips. Click sentiment dots in Chart 1 to inspect posts.")
+
+    is_comparison = "ticker" in history.columns and history["ticker"].nunique(
+    ) > 1
+    if is_comparison:
+        compared_tickers = ", ".join(
+            sorted(history["ticker"].dropna().unique().tolist()))
+        st.caption(f"Comparison mode: {compared_tickers}")
 
     va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
         "📌 Signal Convergence",
@@ -309,9 +320,14 @@ def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFram
 
     with va_tab1:
         st.subheader("Price × Reddit Sentiment")
-        st.caption("Dots on the price line represent Reddit posts. Size = relevance, Colour = sentiment (red → green). Click a dot to inspect the post.")
+        st.caption(
+            "Dots on the price line represent Reddit posts. Size = relevance, Colour = sentiment (red → green). "
+            "When comparison is enabled, price lines are overlaid by ticker."
+        )
+
         convergence_result = build_signal_convergence_chart(
             history, extended_social)
+
         if convergence_result is None or convergence_result[0] is None:
             st.info(
                 "Not enough overlapping price and Reddit data to render this chart.")
@@ -319,18 +335,38 @@ def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFram
             convergence_chart, social_merged = convergence_result
             event = st.altair_chart(
                 convergence_chart, use_container_width=True, key="convergence_chart")
+
             selected_points = event.get(
                 "convergence_sel", []) if isinstance(event, dict) else []
+
             if selected_points:
-                selected_ids = [p.get("post_id")
-                                for p in selected_points if p.get("post_id")]
-                filtered = social_merged[social_merged["post_id"].isin(
-                    selected_ids)]
+                selected_post_ids = [
+                    point.get("post_id") for point in selected_points if point.get("post_id")]
+
+                if is_comparison:
+                    selected_tickers = [
+                        point.get("ticker") for point in selected_points if point.get("ticker")]
+                    filtered = social_merged[
+                        social_merged["post_id"].isin(selected_post_ids)
+                        & social_merged["ticker"].isin(selected_tickers)
+                    ]
+                else:
+                    filtered = social_merged[social_merged["post_id"].isin(
+                        selected_post_ids)]
+
                 st.subheader("Selected Post")
                 for _, post_row in filtered.iterrows():
-                    st.markdown(f"**{post_row['title']}**")
+                    if is_comparison:
+                        st.markdown(
+                            f"**[{post_row['ticker']}] {post_row['title']}**")
+                    else:
+                        st.markdown(f"**{post_row['title']}**")
+
                     st.caption(
-                        f"Sentiment: {round(post_row['sentiment_score'], 3)} | Relevance: {round(post_row['relevance_score'], 3)}")
+                        f"Sentiment: {round(post_row['sentiment_score'], 3)} | "
+                        f"Relevance: {round(post_row['relevance_score'], 3)}"
+                    )
+
                     if post_row["contents"]:
                         st.write(post_row["contents"][:600])
             else:
@@ -339,29 +375,35 @@ def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFram
     with va_tab2:
         st.subheader("7-Day Weighted Sentiment Momentum")
         st.caption(
-            "Rolling average of Reddit sentiment weighted by relevance score. Green = bullish momentum, Red = bearish.")
+            "Rolling average of Reddit sentiment weighted by relevance score. "
+            "In comparison mode, each line represents one ticker."
+        )
         momentum_chart = build_sentiment_momentum_chart(extended_social)
+
         if momentum_chart is None:
             st.info("Not enough data points to calculate sentiment momentum.")
         else:
             st.altair_chart(momentum_chart, use_container_width=True)
 
     with va_tab3:
-        st.subheader("Engagement vs. Sentiment")
+        st.subheader("Comments vs. Sentiment")
         st.caption(
-            "Each point is a Reddit post. High upvotes + negative sentiment = potential retail panic signal.")
-        scatter_chart = build_engagement_scatter_chart(social)
-        if scatter_chart is None:
-            st.info("No Reddit engagement data available.")
+            "High comments + negative sentiment can indicate heated bearish debate. "
+            "In comparison mode, colour shows ticker and bubble size shows upvotes."
+        )
+        comments_chart = build_comments_vs_sentiment_chart(extended_social)
+
+        if comments_chart is None:
+            st.info("No Reddit data available.")
         else:
-            st.altair_chart(scatter_chart, use_container_width=True)
-            st.caption("Quadrant guide: top-right = popular & bullish | bottom-left = ignored & bearish | **top-left = high engagement & negative = watch carefully**")
+            st.altair_chart(comments_chart, use_container_width=True)
 
     with va_tab4:
         st.subheader("Signal Overview")
         st.caption(
-            "Aggregate sentiment for each source at a glance. Green = positive · Amber = neutral · Red = negative. "
-            "Divergence between News and Reddit may signal institutional vs retail disagreement.")
+            "Aggregate sentiment for each source at a glance. "
+            "In comparison mode, each row is a different ticker."
+        )
         indicator_chart = build_sentiment_indicator_row(news, social, history)
         st.altair_chart(indicator_chart, use_container_width=True)
 

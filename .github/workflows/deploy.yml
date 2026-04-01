@@ -1,3 +1,4 @@
+# Triggered manually or on every push to main
 on:
   workflow_dispatch:
   push:
@@ -8,13 +9,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     strategy:
+      # Each service is built and deployed in parallel
       matrix:
         service:
+          # Lambda services — 3 pipelines + 2 RAG handlers
           - { name: "rss-pipeline",    path: "./pipeline/rss",    dockerfile: "dockerfile",        ecr_repo: "c22-stocksiphon-rss-ecr",       type: "lambda", lambda_name: "c22-stocksiphon-rss-lambda" }
           - { name: "alpaca-pipeline", path: "./pipeline/alpaca", dockerfile: "dockerfile",        ecr_repo: "c22-stocksiphon-alpaca-ecr",     type: "lambda", lambda_name: "c22-stocksiphon-alpaca-lambda" }
           - { name: "reddit-pipeline", path: "./pipeline/reddit", dockerfile: "Dockerfile",        ecr_repo: "c22-stocksiphon-reddit-ecr",     type: "lambda", lambda_name: "c22-stocksiphon-reddit-lambda" }
           - { name: "rag-ingest",      path: "./rag_service",     dockerfile: "dockerfile.ingest", ecr_repo: "c22-stocksiphon-ingest-lambda",  type: "lambda", lambda_name: "c22-stocksiphon-rag-ingest-lambda" }
           - { name: "rag-query",       path: "./rag_service",     dockerfile: "dockerfile.query",  ecr_repo: "c22-stocksiphon-query-lambda",   type: "lambda", lambda_name: "c22-stocksiphon-rag-query-lambda" }
+          # ECS service — Streamlit dashboard (always-on Fargate task)
           - {
               name: "dashboard",
               type: "ecs",
@@ -30,6 +34,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Credentials stored as GitHub Actions secrets
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,6 +46,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Build for linux/amd64 (required for Lambda + ECS), tag with commit SHA and latest
       - name: Build, Tag, and Push Image
         env:
           ECR_REGISTRY: 129033205317.dkr.ecr.eu-west-2.amazonaws.com
@@ -60,6 +66,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+      # Point the Lambda function at the new image
       - name: Deploy to Lambda
         if: matrix.service.type == 'lambda'
         run: |
@@ -67,6 +74,7 @@ jobs:
             --function-name ${{ matrix.service.lambda_name }} \
             --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ matrix.service.ecr_repo }}:${{ github.sha }}
 
+      # ECS deployment — fetch current task def, swap image, redeploy
       - name: Download Task Definition
         if: matrix.service.type == 'ecs'
         run: |

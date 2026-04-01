@@ -1,3 +1,4 @@
+# Runs on PRs and pushes to main — all 4 test jobs execute in parallel
 on:
   workflow_dispatch:
   pull_request:
@@ -73,6 +74,7 @@ jobs:
       - name: Run tests
         run: pytest pipeline/alpaca/
 
+  # Tests embedding, ingestion, and retrieval logic against local ChromaDB
   test-rag:
     runs-on: ubuntu-latest
     name: Test RAG Service

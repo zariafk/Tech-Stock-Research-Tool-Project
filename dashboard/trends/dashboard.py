@@ -144,7 +144,22 @@ def dashboard():
         st.info(
             "Not enough data to calculate return/volatility metrics for this period.")
     else:
-        st.subheader("Return vs Volatility Landscape")
+        rv_title, rv_info = st.columns([6, 1])
+        with rv_title:
+            st.subheader("Return vs Volatility Landscape")
+        with rv_info:
+            with st.popover("ℹ️"):
+                st.markdown(
+                    "**Return vs Volatility Landscape**\n\n"
+                    "A high-level view of every tracked ticker's risk-return "
+                    "profile for the selected period.\n\n"
+                    "- **KPIs** — best/worst return and lowest/highest "
+                    "volatility tickers.\n"
+                    "- **Scatter chart** — each dot is a ticker; x-axis is "
+                    "annualised volatility, y-axis is total return.\n"
+                    "- Use the **ticker view** radio to toggle between all "
+                    "tickers and the top/bottom movers."
+                )
         st.caption("See how each stock balances growth with volatility. Size shows total return; position shows risk. Click a ticker to highlight it.")
         render_return_volatility_section(metrics_df, period_short_label)
 
@@ -178,7 +193,7 @@ def dashboard():
 
     # ── Chart 2: Relative volume vs trade count ────────────────
     with col_left:
-        chart2_title, chart2_info = st.columns([10, 1])
+        chart2_title, chart2_info = st.columns([6, 1])
         with chart2_title:
             st.markdown("#### Relative Volume vs Trade Count")
         with chart2_info:
@@ -211,7 +226,7 @@ def dashboard():
 
     # ── Chart 4: Close price over time — multi-ticker ─────────────────────────
     with col_right:
-        chart4_title, chart4_info = st.columns([10, 1])
+        chart4_title, chart4_info = st.columns([6, 1])
         with chart4_title:
             st.markdown("#### Close Price Over Time")
         with chart4_info:
@@ -242,7 +257,7 @@ def dashboard():
             st.altair_chart(line_chart, use_container_width=True)
 
     # ── Chart 5: Combined sentiment lollipop (avg across sources) ─────────────
-    chart5_title, chart5_info = st.columns([10, 1])
+    chart5_title, chart5_info = st.columns([6, 1])
     with chart5_title:
         st.markdown("#### Avg Sentiment by Ticker")
     with chart5_info:

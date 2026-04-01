@@ -170,7 +170,7 @@ def render_kpi_metrics(metrics_df: pd.DataFrame) -> None:
 
 def render_return_volatility_section(metrics_df: pd.DataFrame, period_short_label: str) -> None:
     """Render the full return vs volatility section: header, KPIs, scope radio, chart, caption."""
-    title_col, info_col = st.columns([10, 1])
+    title_col, info_col = st.columns([6, 1])
     with title_col:
         st.markdown("#### Return vs Volatility")
     with info_col:

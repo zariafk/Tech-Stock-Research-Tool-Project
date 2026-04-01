@@ -1,0 +1,92 @@
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - { name: "rss-pipeline",    path: "./pipeline/rss",    dockerfile: "dockerfile",        ecr_repo: "c22-stocksiphon-rss-ecr",       type: "lambda", lambda_name: "c22-stocksiphon-rss-lambda" }
+          - { name: "alpaca-pipeline", path: "./pipeline/alpaca", dockerfile: "dockerfile",        ecr_repo: "c22-stocksiphon-alpaca-ecr",     type: "lambda", lambda_name: "c22-stocksiphon-alpaca-lambda" }
+          - { name: "reddit-pipeline", path: "./pipeline/reddit", dockerfile: "Dockerfile",        ecr_repo: "c22-stocksiphon-reddit-ecr",     type: "lambda", lambda_name: "c22-stocksiphon-reddit-lambda" }
+          - { name: "rag-ingest",      path: "./rag_service",     dockerfile: "dockerfile.ingest", ecr_repo: "c22-stocksiphon-ingest-lambda",  type: "lambda", lambda_name: "c22-stocksiphon-rag-ingest-lambda" }
+          - { name: "rag-query",       path: "./rag_service",     dockerfile: "dockerfile.query",  ecr_repo: "c22-stocksiphon-query-lambda",   type: "lambda", lambda_name: "c22-stocksiphon-rag-query-lambda" }
+          - {
+              name: "dashboard",
+              type: "ecs",
+              path: "./dashboard",
+              dockerfile: "Dockerfile",
+              ecr_repo: "c22-stocksiphon-dashboard-ecr",
+              ecs_cluster: "c22-stocksiphon-cluster",
+              ecs_service: "c22-stocksiphon-dashboard-service",
+              container_name: "stocksiphon-dashboard",
+              task_definition: "c22-stocksiphon-dashboard-task"
+            }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} 
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Image
+        env:
+          ECR_REGISTRY: 129033205317.dkr.ecr.eu-west-2.amazonaws.com
+          ECR_REPOSITORY: ${{ matrix.service.ecr_repo }} 
+          IMAGE_TAG: ${{ github.sha }} 
+        run: |
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || \ 
+          aws ecr create-repository --repository-name $ECR_REPOSITORY
+
+          docker build \
+            --platform linux/amd64 \
+            -f ${{ matrix.service.path }}/${{ matrix.service.dockerfile }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            ${{ matrix.service.path }}
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Deploy to Lambda
+        if: matrix.service.type == 'lambda'
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ matrix.service.lambda_name }} \
+            --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ matrix.service.ecr_repo }}:${{ github.sha }}
+
+      - name: Download Task Definition
+        if: matrix.service.type == 'ecs'
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ matrix.service.task_definition }} --query taskDefinition > task-definition.json
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        if: matrix.service.type == 'ecs'
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ matrix.service.container_name }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ matrix.service.ecr_repo }}:${{ github.sha }}
+
+      - name: Deploy Amazon ECS task definition
+        if: matrix.service.type == 'ecs'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ matrix.service.ecs_service }}
+          cluster: ${{ matrix.service.ecs_cluster }}
+          wait-for-service-stability: true
+          force-new-deployment: true

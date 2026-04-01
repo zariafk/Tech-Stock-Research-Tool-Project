@@ -1,0 +1,96 @@
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  test-reddit:
+    runs-on: ubuntu-latest
+    name: Test Reddit Pipeline
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pandas boto3 pyarrow psycopg2-binary openai requests python-dotenv
+
+      - name: Run tests
+        run: pytest pipeline/reddit/test_files/
+
+  test-rss:
+    runs-on: ubuntu-latest
+    name: Test RSS Pipeline
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r pipeline/rss/requirements.txt
+
+      - name: Run tests
+        run: pytest pipeline/rss/test/
+
+  test-alpaca:
+    runs-on: ubuntu-latest
+    name: Test Alpaca Pipeline
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r pipeline/alpaca/requirements.txt
+
+      - name: Run tests
+        run: pytest pipeline/alpaca/
+
+  test-rag:
+    runs-on: ubuntu-latest
+    name: Test RAG Service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r rag_service/requirements.txt
+
+      - name: Run tests
+        run: pytest rag_service/tests/

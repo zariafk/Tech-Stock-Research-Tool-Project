@@ -35,7 +35,7 @@ from chatbot import render_chatbot
 
 load_dotenv()
 
-SECRETS_REPO = os.environ["secrets_repo_name"]
+SECRETS_REPO = os.environ["SECRETS_REPO_NAME"]
 
 
 # ---------------------------------------------------------------------------

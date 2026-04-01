@@ -127,7 +127,8 @@ def dashboard():
 
     st.divider()
 
-    # ── Return vs Volatility ─────────────────────────────────────────────────────
+    # ── PRIMARY: Return vs Volatility ─────────────────────────────────────────────────────
+    # This is the most important chart — appears first
     try:
         rv_df_raw = fetch_return_volatility_data(conn)
     except Exception as e:
@@ -143,6 +144,8 @@ def dashboard():
         st.info(
             "Not enough data to calculate return/volatility metrics for this period.")
     else:
+        st.subheader("Return vs Volatility Landscape")
+        st.caption("See how each stock balances growth with volatility. Size shows total return; position shows risk. Click a ticker to highlight it.")
         render_return_volatility_section(metrics_df, period_short_label)
 
     st.divider()

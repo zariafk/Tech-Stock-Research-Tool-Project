@@ -189,6 +189,7 @@ def dashboard():
     )
     st.divider()
 
+    # filter input
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
 
@@ -231,6 +232,13 @@ def dashboard():
 
     st.divider()
 
+    with st.expander("📊 Company Summary", expanded=True):
+        with st.spinner("Generating summary..."):
+            summary = get_company_summary(ticker, company_name)
+        st.write(summary)
+
+    st.divider()
+
     latest, history = fetch_market_data(conn, stock_id, cutoff_date)
     news = fetch_news_signals(conn, stock_id, cutoff_date)
     social = fetch_social_signals(conn, stock_id, cutoff_date)
@@ -239,13 +247,6 @@ def dashboard():
     st.header(f"Market Data — {ticker} ({company_name})")
 
     render_market_section(latest, history, time_label)
-    st.divider()
-
-    with st.expander("📊 Company Summary", expanded=True):
-        with st.spinner("Generating summary..."):
-            summary = get_company_summary(ticker, company_name)
-        st.write(summary)
-
     st.divider()
 
     compare_input = st.text_input(

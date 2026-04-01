@@ -179,13 +179,81 @@ def combine_ticker_data(
 
 
 # ---------------------------------------------------------------------------
+# Dashboard helpers
+# ---------------------------------------------------------------------------
+def compute_cutoff_date(time_days: int | None):
+    """Convert a number-of-days value into a date cutoff, or None for all data."""
+    if time_days is None:
+        return None
+    return (pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)).date()
+
+
+def fetch_primary_datasets(
+    stock_id: int,
+    cutoff_date,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Fetch all primary datasets for the selected stock and time range."""
+    latest, history = fetch_market_data(conn, stock_id, cutoff_date)
+    news = fetch_news_signals(conn, stock_id, cutoff_date)
+    social = fetch_social_signals(conn, stock_id, cutoff_date)
+    extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
+    return latest, history, news, social, extended_social
+
+
+def fetch_comparison_datasets(
+    compare_input: str,
+    cutoff_date,
+) -> tuple[str | None, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Fetch datasets for an optional comparison ticker. Returns empty frames if not found."""
+    empty = pd.DataFrame()
+
+    if not compare_input.strip():
+        return None, empty, empty, empty, empty
+
+    compare_result = fetch_stock_by_ticker_or_name(conn, compare_input.strip())
+
+    if not compare_result:
+        st.warning("Comparison ticker not found.")
+        return None, empty, empty, empty, empty
+
+    compare_stock_id, compare_ticker, _ = compare_result
+    _, compare_history = fetch_market_data(conn, compare_stock_id, cutoff_date)
+    compare_extended_social = fetch_extended_social(
+        conn, compare_stock_id, cutoff_date)
+    compare_social = fetch_social_signals(conn, compare_stock_id, cutoff_date)
+    compare_news = fetch_news_signals(conn, compare_stock_id, cutoff_date)
+    return compare_ticker, compare_history, compare_extended_social, compare_social, compare_news
+
+
+def build_combined_datasets(
+    primary_ticker: str,
+    compare_ticker: str | None,
+    history: pd.DataFrame,
+    extended_social: pd.DataFrame,
+    social: pd.DataFrame,
+    news: pd.DataFrame,
+    compare_history: pd.DataFrame,
+    compare_extended_social: pd.DataFrame,
+    compare_social: pd.DataFrame,
+    compare_news: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Merge primary and comparison dataframes into combined datasets."""
+    combined_history = combine_ticker_data(
+        history, compare_history, primary_ticker, compare_ticker)
+    combined_extended = combine_ticker_data(
+        extended_social, compare_extended_social, primary_ticker, compare_ticker)
+    combined_social = combine_ticker_data(
+        social, compare_social, primary_ticker, compare_ticker)
+    combined_news = combine_ticker_data(
+        news, compare_news, primary_ticker, compare_ticker)
+    return combined_history, combined_extended, combined_social, combined_news
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
-
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""
-
-    # filter input
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
 
@@ -195,7 +263,6 @@ def dashboard():
                 placeholder="e.g., AAPL or Apple",
                 key="stock_search",
             )
-
         with col2:
             st.write("")
             search_btn = st.button("Search", use_container_width=True)
@@ -220,28 +287,46 @@ def dashboard():
             horizontal=True,
             key=f"trends_time_range_{ticker}",
         )
-        time_days = TIME_OPTIONS[time_label]
-
-        cutoff_date = None if time_days is None else (
-            pd.Timestamp.today().normalize() - pd.Timedelta(days=time_days)
-        ).date()
+        cutoff_date = compute_cutoff_date(TIME_OPTIONS[time_label])
 
     st.divider()
 
-    with st.expander("📊 Company Summary", expanded=True):
+    summary_title, summary_info = st.columns([6, 1])
+    with summary_title:
+        st.markdown("#### 📊 Company Summary")
+    with summary_info:
+        with st.popover("ℹ️"):
+            st.markdown(
+                "**Company Summary**\n\n"
+                "AI-generated overview powered by our RAG service. "
+                "Combines recent price movements, news headlines, and "
+                "Reddit sentiment into a plain-English briefing for the "
+                "selected stock."
+            )
+    with st.expander("View Summary", expanded=True):
         with st.spinner("Generating summary..."):
             summary = get_company_summary(ticker, company_name)
         st.write(summary)
 
     st.divider()
 
-    latest, history = fetch_market_data(conn, stock_id, cutoff_date)
-    news = fetch_news_signals(conn, stock_id, cutoff_date)
-    social = fetch_social_signals(conn, stock_id, cutoff_date)
-    extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
+    latest, history, news, social, extended_social = fetch_primary_datasets(
+        stock_id, cutoff_date)
 
-    st.header(f"Market Data — {ticker} ({company_name})")
-
+    market_title, market_info = st.columns([6, 1])
+    with market_title:
+        st.header(f"Market Data — {ticker} ({company_name})")
+    with market_info:
+        with st.popover("ℹ️"):
+            st.markdown(
+                "**Market Data**\n\n"
+                "Live price metrics for the selected stock within the "
+                "chosen time range:\n\n"
+                "- **Current Price** — latest closing price with change vs period start.\n"
+                "- **Range** — highest and lowest prices in the period.\n"
+                "- **Volume** — total shares traded in the period.\n"
+                "- **Trend** — direction based on the last 5 closing prices."
+            )
     render_market_section(latest, history, time_label)
     st.divider()
 
@@ -251,65 +336,56 @@ def dashboard():
         key=f"compare_ticker_{ticker}",
     )
 
-    compare_result = None
-    compare_ticker = None
-    compare_history = pd.DataFrame()
-    compare_extended_social = pd.DataFrame()
-    compare_social = pd.DataFrame()
-    compare_news = pd.DataFrame()
-
-    if compare_input.strip():
-        compare_result = fetch_stock_by_ticker_or_name(
-            conn, compare_input.strip())
-
-        if compare_result:
-            compare_stock_id, compare_ticker, _ = compare_result
-            _, compare_history = fetch_market_data(
-                conn, compare_stock_id, cutoff_date)
-            compare_extended_social = fetch_extended_social(
-                conn, compare_stock_id, cutoff_date
-            )
-            compare_social = fetch_social_signals(
-                conn, compare_stock_id, cutoff_date
-            )
-            compare_news = fetch_news_signals(
-                conn, compare_stock_id, cutoff_date
-            )
-        else:
-            st.warning("Comparison ticker not found.")
-
-    combined_history = combine_ticker_data(
-        history, compare_history, ticker, compare_ticker
+    compare_ticker, compare_history, compare_extended_social, compare_social, compare_news = (
+        fetch_comparison_datasets(compare_input, cutoff_date)
     )
-    combined_extended_social = combine_ticker_data(
-        extended_social, compare_extended_social, ticker, compare_ticker
-    )
-    combined_social = combine_ticker_data(
-        social, compare_social, ticker, compare_ticker
-    )
-    combined_news = combine_ticker_data(
-        news, compare_news, ticker, compare_ticker
+
+    combined_history, combined_extended, combined_social, combined_news = build_combined_datasets(
+        ticker, compare_ticker,
+        history, extended_social, social, news,
+        compare_history, compare_extended_social, compare_social, compare_news,
     )
 
     render_summary_analytics(
-        combined_history,
-        combined_extended_social,
-        combined_social,
-        combined_news,
-    )
+        combined_history, combined_extended, combined_social, combined_news)
 
-    st.header("News & Market Signals")
+    news_title, news_info = st.columns([6, 1])
+    with news_title:
+        st.header("News & Market Signals")
+    with news_info:
+        with st.popover("ℹ️"):
+            st.markdown(
+                "**News & Market Signals**\n\n"
+                "Aggregated RSS news articles scored by our sentiment "
+                "analysis pipeline:\n\n"
+                "- **News Sentiment** — average sentiment across all articles (-1 to +1).\n"
+                "- **Articles Tracked** — total number of articles in the period.\n"
+                "- **Recent Coverage** — scrollable cards showing each article with "
+                "its sentiment score, relevance, confidence, and AI-generated take."
+            )
     render_news_section(news)
     st.divider()
 
-    st.header("Community Sentiment")
+    social_title, social_info = st.columns([6, 1])
+    with social_title:
+        st.header("Community Sentiment")
+    with social_info:
+        with st.popover("ℹ️"):
+            st.markdown(
+                "**Community Sentiment**\n\n"
+                "Reddit discussion analysis for the selected stock:\n\n"
+                "- **Reddit Sentiment** — average sentiment of tracked posts.\n"
+                "- **Total Comments** — combined comment count across all posts.\n"
+                "- **Top Discussions** — expandable cards for the most active posts.\n"
+                "- **Source Divergence** — compares news vs Reddit sentiment. "
+                "High divergence can signal conflicting institutional vs retail views."
+            )
     render_social_section(social)
     render_divergence_section(news, social)
     st.divider()
 
     st.caption(
-        "_Dashboard updated with live data from RDS. Refresh to see latest signals._"
-    )
+        "_Dashboard updated with live data from RDS. Refresh to see latest signals._")
 
 
 if __name__ == "__main__":

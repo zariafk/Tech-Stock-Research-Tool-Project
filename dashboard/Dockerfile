@@ -5,6 +5,8 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt 
 
 COPY dashboard.py .
+COPY chatbot.py .
+COPY siphon_logo.png .
 
 COPY summary/__init__.py ./summary/
 COPY trends/__init__.py ./trends/

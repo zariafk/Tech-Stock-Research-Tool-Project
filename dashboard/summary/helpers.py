@@ -356,33 +356,6 @@ def render_social_section(social: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------------------
-#  Divergence section
-# ---------------------------------------------------------------------------
-def render_divergence_section(news: pd.DataFrame, social: pd.DataFrame) -> None:
-    """Render institutional vs retail sentiment divergence metrics and alert."""
-    news_avg = news["sentiment_score"].mean() if not news.empty else 0.0
-    social_avg = social["sentiment_score"].mean() if not social.empty else 0.0
-    divergence = news_avg - social_avg
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("News", f"{news_avg:+.2f}", delta_color="normal")
-    col2.metric("Reddit", f"{social_avg:+.2f}", delta_color="normal")
-
-    div_label = "Aligned" if abs(
-        divergence) < DIVERGENCE_ALIGNED_THRESHOLD else "Diverging"
-    col3.metric("Source Divergence", div_label,
-                delta=f"{divergence:+.2f}", delta_color="normal")
-
-    if abs(divergence) > HIGH_DIVERGENCE_THRESHOLD:
-        news_direction = "bullish" if news_avg > 0 else "bearish"
-        social_direction = "bullish" if social_avg > 0 else "bearish"
-        st.warning(
-            f"⚠️ **High Divergence:** Institutions are {news_direction} "
-            f"while Retail is {social_direction}. Potential volatility ahead."
-        )
-
-
-# ---------------------------------------------------------------------------
 #  Summary Analytics (tabbed chart section)
 # ---------------------------------------------------------------------------
 def _render_convergence_tab(
@@ -391,7 +364,7 @@ def _render_convergence_tab(
     is_comparison: bool,
 ) -> None:
     """Render the Signal Convergence tab content."""
-    st.subheader("Price × Reddit Sentiment")
+    st.subheader("Reddit and Price Overlay")
     with st.popover("ℹ️"):
         st.markdown(
             "**Price × Reddit Sentiment**\n\n"
@@ -519,11 +492,7 @@ def _render_comments_tab(extended_social: pd.DataFrame) -> None:
     st.altair_chart(comments_chart, use_container_width=True)
 
 
-def _render_indicator_tab(
-    news: pd.DataFrame,
-    social: pd.DataFrame,
-    history: pd.DataFrame,
-) -> None:
+def render_indicator_tab(news: pd.DataFrame, social: pd.DataFrame, history: pd.DataFrame) -> None:
     """Render the Sources Sentiment Overview tab content."""
     st.subheader("Signal Overview")
     with st.popover("ℹ️"):
@@ -546,12 +515,7 @@ def _render_indicator_tab(
     st.altair_chart(indicator_chart, use_container_width=True)
 
 
-def render_summary_analytics(
-    history: pd.DataFrame,
-    extended_social: pd.DataFrame,
-    social: pd.DataFrame,
-    news: pd.DataFrame,
-) -> None:
+def render_summary_analytics(history: pd.DataFrame, extended_social: pd.DataFrame, social: pd.DataFrame, news: pd.DataFrame) -> None:
     """Render the Summary Analytics tab group with all interactive Altair charts."""
     analytics_title, analytics_info = st.columns([6, 1])
     with analytics_title:
@@ -560,12 +524,11 @@ def render_summary_analytics(
         with st.popover("ℹ️"):
             st.markdown(
                 "**Summary Analytics**\n\n"
-                "Four interactive chart tabs exploring the relationship between "
+                "Three interactive chart tabs exploring the relationship between "
                 "price, news, and Reddit sentiment:\n\n"
-                "1. **Signal Convergence** — price line overlaid with Reddit sentiment dots.\n"
+                "1. **Reddit and Price Overlay** — price line overlaid with Reddit sentiment dots.\n"
                 "2. **Sentiment Momentum** — 7-day rolling weighted sentiment.\n"
                 "3. **Comments vs Sentiment** — scatter of discussion volume vs sentiment.\n"
-                "4. **Sources Overview** — traffic-light indicators for News, Reddit, and Market.\n\n"
                 "When a comparison ticker is added, all charts update to show both tickers."
             )
     st.caption(
@@ -578,11 +541,10 @@ def render_summary_analytics(
             sorted(history["ticker"].dropna().unique().tolist()))
         st.caption(f"Comparison mode: {compared_tickers}")
 
-    va_tab1, va_tab2, va_tab3, va_tab4 = st.tabs([
-        "📌 Reddit and Price Correlation",
+    va_tab1, va_tab2, va_tab3 = st.tabs([
+        "📌 Reddit and Price Overlay",
         "📈 Sentiment Momentum",
         "💬 Comments vs Sentiment",
-        "💭 Sources Sentiment Overview",
     ])
 
     with va_tab1:
@@ -591,8 +553,6 @@ def render_summary_analytics(
         _render_momentum_tab(extended_social)
     with va_tab3:
         _render_comments_tab(extended_social)
-    with va_tab4:
-        _render_indicator_tab(news, social, history)
 
 
 # ---------------------------------------------------------------------------

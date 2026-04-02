@@ -26,7 +26,7 @@ from .helpers import (
     render_market_section,
     render_news_section,
     render_social_section,
-    render_divergence_section,
+    render_indicator_tab,
     get_company_summary,
     render_summary_analytics,
     TIME_OPTIONS
@@ -240,6 +240,10 @@ def dashboard():
     social = fetch_social_signals(conn, stock_id, cutoff_date)
     extended_social = fetch_extended_social(conn, stock_id, cutoff_date)
 
+    render_indicator_tab(news, social, history)
+
+    st.divider()
+
     tab_market, tab_news, tab_reddit = st.tabs([
         "📈 Market Data",
         "📰 News",
@@ -255,8 +259,13 @@ def dashboard():
         render_news_section(news)
 
     with tab_reddit:
+        st.header("Community Sentiment")
+        render_social_section(social)
+
+        st.divider()
+
         compare_input = st.text_input(
-            "Compare with another ticker (optional)",
+            "Compare Summary Analytics with another ticker (optional)",
             placeholder="e.g. MSFT",
             key=f"compare_ticker_{ticker}",
         )
@@ -300,14 +309,6 @@ def dashboard():
         combined_news = combine_ticker_data(
             news, compare_news, ticker, compare_ticker
         )
-
-        st.divider()
-
-        st.header("Community Sentiment")
-        render_social_section(social)
-        render_divergence_section(news, social)
-
-        st.divider()
 
         render_summary_analytics(
             combined_history,

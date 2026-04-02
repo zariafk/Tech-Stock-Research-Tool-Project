@@ -17,6 +17,12 @@ def mock_feed_entry():
     entry.link = "https://techcrunch.com/apple-chip"
     entry.summary = "Apple unveiled M4 processor today."
     entry.published_parsed = (2026, 3, 26, 10, 0, 0, 0, 0, 0)
+    entry.get = MagicMock(side_effect=lambda k, d='N/A': {
+        'title': 'Apple announces new chip',
+        'link': 'https://techcrunch.com/apple-chip',
+        'summary': 'Apple unveiled M4 processor today.',
+        'description': 'Apple unveiled M4 processor today.',
+    }.get(k, d))
     return entry
 
 

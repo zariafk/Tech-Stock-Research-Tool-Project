@@ -12,11 +12,6 @@ from logger import logger
 BARS_URL = "https://data.alpaca.markets/v2/stocks/bars"
 LATEST_BARS_URL = "https://data.alpaca.markets/v2/stocks/bars/latest"
 
-SECRETS = get_secret()
-API_KEY = SECRETS["ALPACA_API_KEY"]
-API_SECRET = SECRETS["ALPACA_API_SECRET"]
-
-
 def get_ingestion_time() -> str:
     """Get the current UTC time as an ISO 8601 string."""
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
@@ -24,10 +19,11 @@ def get_ingestion_time() -> str:
 
 def get_request_headers() -> dict[str, str]:
     """Build the request headers for Alpaca authentication."""
-    headers = {
-        "APCA-API-KEY-ID": API_KEY,
-        "APCA-API-SECRET-KEY": API_SECRET}
-    return headers
+    secrets = get_secret()
+    return {
+        "APCA-API-KEY-ID": secrets["ALPACA_API_KEY"],
+        "APCA-API-SECRET-KEY": secrets["ALPACA_API_SECRET"],
+    }
 
 
 def make_request(url: str, headers: dict, params: dict) -> dict:

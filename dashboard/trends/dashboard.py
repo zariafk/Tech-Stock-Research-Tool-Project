@@ -51,7 +51,7 @@ def get_connection():
         )
 
     # Fall back to Secrets Manager (Lambda / prod)
-    secret = get_secret(os.environ["secrets_repo_name"])
+    secret = get_secret(os.environ["SECRETS_REPO_NAME"])
     return psycopg2.connect(
         host=secret["host"],
         port=secret.get("port", 5432),
@@ -68,10 +68,7 @@ if "conn" not in st.session_state:
 if st.session_state.conn is None:
     try:
         st.session_state.conn = get_connection()
-        st.sidebar.success("Connected to RDS ✓")
     except Exception as e:
-        st.sidebar.error("Could not connect to database.")
-        st.sidebar.caption(str(e))
         raise RuntimeError("Database connection failed")
 
 conn = st.session_state.conn
@@ -127,7 +124,8 @@ def dashboard():
 
     st.divider()
 
-    # ── Return vs Volatility ─────────────────────────────────────────────────────
+    # ── PRIMARY: Return vs Volatility ─────────────────────────────────────────────────────
+    # This is the most important chart — appears first
     try:
         rv_df_raw = fetch_return_volatility_data(conn)
     except Exception as e:
@@ -143,6 +141,23 @@ def dashboard():
         st.info(
             "Not enough data to calculate return/volatility metrics for this period.")
     else:
+        rv_title, rv_info = st.columns([6, 1])
+        with rv_title:
+            st.subheader("Return vs Volatility Landscape")
+        with rv_info:
+            with st.popover("ℹ️"):
+                st.markdown(
+                    "**Return vs Volatility Landscape**\n\n"
+                    "A high-level view of every tracked ticker's risk-return "
+                    "profile for the selected period.\n\n"
+                    "- **KPIs** — best/worst return and lowest/highest "
+                    "volatility tickers.\n"
+                    "- **Scatter chart** — each dot is a ticker; x-axis is "
+                    "annualised volatility, y-axis is total return.\n"
+                    "- Use the **ticker view** radio to toggle between all "
+                    "tickers and the top/bottom movers."
+                )
+        st.caption("See how each stock balances growth with volatility. Size shows total return; position shows risk. Click a ticker to highlight it.")
         render_return_volatility_section(metrics_df, period_short_label)
 
     st.divider()
@@ -175,7 +190,7 @@ def dashboard():
 
     # ── Chart 2: Relative volume vs trade count ────────────────
     with col_left:
-        chart2_title, chart2_info = st.columns([10, 1])
+        chart2_title, chart2_info = st.columns([6, 1])
         with chart2_title:
             st.markdown("#### Relative Volume vs Trade Count")
         with chart2_info:
@@ -208,7 +223,7 @@ def dashboard():
 
     # ── Chart 4: Close price over time — multi-ticker ─────────────────────────
     with col_right:
-        chart4_title, chart4_info = st.columns([10, 1])
+        chart4_title, chart4_info = st.columns([6, 1])
         with chart4_title:
             st.markdown("#### Close Price Over Time")
         with chart4_info:
@@ -239,7 +254,7 @@ def dashboard():
             st.altair_chart(line_chart, use_container_width=True)
 
     # ── Chart 5: Combined sentiment lollipop (avg across sources) ─────────────
-    chart5_title, chart5_info = st.columns([10, 1])
+    chart5_title, chart5_info = st.columns([6, 1])
     with chart5_title:
         st.markdown("#### Avg Sentiment by Ticker")
     with chart5_info:

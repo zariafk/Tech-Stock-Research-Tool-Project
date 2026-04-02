@@ -5,3 +5,10 @@ pytest
 requests
 python-dotenv
 boto3
+alpaca-py
+pylint
+psycopg2-binary
+pytz
+numpy
+feedparser
+pyarrow

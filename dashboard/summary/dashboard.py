@@ -255,7 +255,7 @@ def dashboard():
         render_market_section(latest, history, time_label)
 
     with tab_news:
-        st.header("News & Market Signals")
+        st.header("News Signals")
         render_news_section(news)
 
     with tab_reddit:

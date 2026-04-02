@@ -1,78 +1,87 @@
 # Reddit ETL Pipeline
 
-Extracts posts from finance/tech subreddits, identifies stock mentions using OpenAI, scores relevance and sentiment, and loads results into PostgreSQL.
+## Overview
 
-## Pipeline Flow
+Scrapes finance and tech subreddits, uses OpenAI to score stock relevance and sentiment, and loads structured results into PostgreSQL — deployed as an AWS Lambda container.
 
 ```
-Extract → Deduplicate → Transform → Analyse (OpenAI) → Load (RDS)
+Extract  →  Deduplicate  →  Transform  →  Analyse  →  Load
 ```
 
-| Step | Description |
+**Extract** pulls posts from 12 subreddits via the [Arctic Shift API](https://arctic-shift.photon-reddit.com/). **Deduplicate** drops posts already in the database. **Transform** cleans, validates, and shapes the data into `reddit_post` and `subreddit` tables. **Analyse** keyword-filters posts then sends matches to GPT-4o-mini for relevance (0–10) and sentiment (-1.0 to 1.0) scoring — only posts scoring 7+ are kept. **Load** upserts results into PostgreSQL and invokes a RAG ingest Lambda for downstream search.
+
+A historical backfill pipeline (`historical_pipeline.py`) covers posts back to January 2024 and shares the same transform, analysis, and load steps.
+
+## What You Need
+
+**Python dependencies** — install via `pip install -r requirements.txt`. Key packages: `requests`, `pandas`, `boto3`, `psycopg2-binary`, `openai`.
+
+**AWS Secrets Manager** — a single secret (`c22-trade-research-tool-secrets`) containing:
+
+```json
+{
+  "host": "...",
+  "port": 5432,
+  "dbname": "...",
+  "username": "...",
+  "password": "...",
+  "OPENAI_API_KEY": "sk-..."
+}
+```
+
+**Database** — the `stock` table must be pre-populated with tickers and company names. The pipeline writes to:
+
+| Table | Purpose |
 |---|---|
-| **Extract** | Fetches posts from 12 subreddits via Reddit's JSON API |
-| **Deduplicate** | Removes posts already in the database |
-| **Transform** | Cleans data, validates types, builds `reddit_post` and `subreddit` tables |
-| **Analyse** | Keyword pre-filter, then OpenAI (`gpt-4o-mini`) scores relevance (0–10) and sentiment (-1.0 to 1.0). Only 7+ relevance kept. Multithreaded |
-| **Load** | Inserts into PostgreSQL with upsert logic for subreddits |
+| `subreddit` | Subreddit metadata (name, subscriber count) |
+| `reddit_post` | Post content, scores, timestamps, and flair |
+| `reddit_analysis` | Per-post ticker sentiment, relevance, confidence, and analysis |
 
-A historical backfill pipeline (`historical_pipeline.py`) fetches posts back to January 2024 via the [Arctic Shift API](https://arctic-shift.photon-reddit.com/) and shares the same transform, analysis, and load steps.
+## How to Deploy
 
-## Setup
-
-### Secrets Manager
-
-The pipeline reads from a single AWS secret (`c22-trade-research-tool-secrets`):
+The deploy script builds a `linux/amd64` Lambda image and pushes it to ECR (`c22-stocksiphon-reddit-ecr`):
 
 ```bash
-aws secretsmanager create-secret \
-  --name "c22-trade-research-tool-secrets" \
-  --secret-string '{"host":"...","port":5432,"dbname":"...","username":"...","password":"...","OPENAI_API_KEY":"sk-..."}' \
-  --region eu-west-2
+chmod +x deploy_reddit_pipeline.sh
+./deploy_reddit_pipeline.sh
 ```
 
-### Database
-
-The `stock` table must be pre-populated with tickers. The pipeline writes to:
-
-| Table | Key Columns |
-|---|---|
-| `subreddit` | `subreddit_id`, `subreddit_name`, `subreddit_subscribers` |
-| `reddit_post` | `post_id`, `title`, `contents`, `flair`, `score`, `ups`, `upvote_ratio`, `num_comments`, `author`, `created_at`, `permalink`, `url`, `subreddit_id` |
-| `story_stock` | `story_id`, `stock_id`, `sentiment_score`, `relevance_score`, `analysis`, `story_type` |
-
-## Usage
-
-**Locally:**
+## How to Run
 
 ```bash
-pip install -r requirements.txt
-python pipeline.py                # live
-python historical_pipeline.py     # backfill
+python pipeline.py              # live run
+python historical_pipeline.py   # backfill
+pytest                          # run tests
 ```
 
-**Deploy to ECR:**
+Unit tests cover each pipeline stage in isolation — API calls and database connections are fully mocked. The suite validates extraction and retry logic, deduplication filtering, transform operations (timestamp conversion, numeric clamping, null/deleted row removal), and database insertion with conflict handling.
 
-Update `AWS_ACCOUNT_ID` and `REPO_NAME` in `deploy.sh`, then:
+## Notes
 
-```bash
-chmod +x deploy.sh && ./deploy.sh
+- The live pipeline is triggered via `pipeline.lambda_handler` when deployed as a Lambda.
+- The historical backfill extracts day-by-day using Arctic Shift's `after`/`before` timestamp parameters and paginates automatically.
+- Analysis runs multithreaded (up to 20 workers) to parallelise OpenAI calls. Posts are keyword-pre-filtered before being sent to the API to minimise cost.
+- The RAG ingest step (`rag_ingest_invoke.py`) calls a separate Lambda (`c22-stocksiphon-rag-ingest-lambda`) synchronously and raises on failure.
+
+### Project Structure
+
 ```
-
-Builds a `linux/amd64` Lambda image and pushes to `<account-id>.dkr.ecr.eu-west-2.amazonaws.com/<repo-name>:latest`.
-
-## Project Structure
-
-```
-pipeline.py              # Orchestrator (live)
-historical_pipeline.py   # Orchestrator (backfill)
-extract.py               # Reddit JSON API client
-historical_extract.py    # Arctic Shift API client
-deduplicate.py           # Raw post deduplication
-transform.py             # Cleaning, validation, table building
-analysis.py              # OpenAI ticker relevance & sentiment
-load.py                  # PostgreSQL insertion & helpers
-Dockerfile               # Lambda container image
-deploy.sh                # ECR build & push script
-requirements.txt         # Python dependencies
+pipeline.py                  Live pipeline orchestrator
+historical_pipeline.py       Historical backfill orchestrator
+extract.py                   Arctic Shift API client
+historical_extract.py        Date-range historical extraction
+deduplicate.py               Filters already-seen posts
+transform.py                 Cleaning, validation, table building
+analysis.py                  OpenAI ticker scoring (multithreaded)
+load.py                      PostgreSQL insertion & helpers
+rag_ingest_invoke.py         Lambda invocation for RAG pipeline
+Dockerfile                   Lambda container image
+deploy_reddit_pipeline.sh    ECR build & push script
+requirements.txt             Python dependencies
+test_files/
+    conftest.py              Shared fixtures (sample posts, column lists)
+    test_extract.py          API client, retry, and comment fetching
+    test_deduplicate.py      Duplicate filtering logic
+    test_transform.py        Flattening, validation, timestamp conversion
+    test_load.py             Database insertion and upsert handling
 ```

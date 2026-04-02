@@ -18,7 +18,7 @@ TIME_OPTIONS: dict[str, int | None] = {
     "3 Months":   90,
     "6 Months":   180,
     "1 Year":     365,
-    "From Start": None,
+    "All History (From 2024)": None,
 }
 
 PERIOD_SHORT_LABEL_MAP: dict[str, str] = {
@@ -26,7 +26,7 @@ PERIOD_SHORT_LABEL_MAP: dict[str, str] = {
     "3 Months":   "3M",
     "6 Months":   "6M",
     "1 Year":     "1Y",
-    "From Start": "All",
+    "All History (From 2024)": "All",
 }
 
 LOCAL_SCOPE_OPTIONS: list[str] = ["All Tickers", "Top 10", "Bottom 10"]
@@ -170,7 +170,7 @@ def render_kpi_metrics(metrics_df: pd.DataFrame) -> None:
 
 def render_return_volatility_section(metrics_df: pd.DataFrame, period_short_label: str) -> None:
     """Render the full return vs volatility section: header, KPIs, scope radio, chart, caption."""
-    title_col, info_col = st.columns([10, 1])
+    title_col, info_col = st.columns([6, 1])
     with title_col:
         st.markdown("#### Return vs Volatility")
     with info_col:

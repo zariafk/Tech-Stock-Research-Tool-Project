@@ -1,17 +1,23 @@
 """Main pipeline orchestrator."""
 
-import logging
 from datetime import datetime, timezone
+import logging
+import os
+import json
+
+from openai import OpenAI
 
 from historical_extract import extract_historical
 from deduplicate import deduplicate_raw_posts
 from transform import transform_main
-from load import get_secret, get_connection, get_existing_ids, load_main
+from analysis import analyse_posts
+from load import get_secret, get_connection, get_existing_ids, load_main, join_tables_to_json, get_stock_id_map, build_story_stock_df
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-RDS_SECRET_NAME = "c22-trade-research-tool-secrets"
+SECRET_NAME = "c22-trade-research-tool-secrets"
 
 SUBREDDITS = [
     "trading", "stocks", "investing", "stockmarket",
@@ -26,6 +32,13 @@ FACT_POSTS_COLUMNS = [
     "created_utc", "permalink", "url", "subreddit_id",
 ]
 
+FACT_POSTS_RENAME = {
+    "id": "post_id",
+    "selftext": "contents",
+    "link_flair_text": "flair",
+    "created_utc": "created_at",
+}
+
 DIM_SUBREDDITS_COLUMNS = [
     "subreddit_id", "subreddit", "subreddit_subscribers",
 ]
@@ -33,21 +46,30 @@ DIM_SUBREDDITS_COLUMNS = [
 REQUIRED_COLUMNS = ["id", "title", "subreddit_id", "author"]
 
 
+def get_ticker_companies(conn) -> dict[str, str]:
+    """Fetches ticker -> stock_name mapping from the stock table."""
+    query = "SELECT ticker, stock_name FROM stock"
+    with conn.cursor() as cur:
+        cur.execute(query)
+        return {ticker: name for ticker, name in cur.fetchall()}
+
+
 def run_pipeline() -> None:
     """Runs the full ETL pipeline."""
-    secret = get_secret(RDS_SECRET_NAME)
+    secret = get_secret(SECRET_NAME)
     conn = get_connection(secret)
+    openai_client = OpenAI(api_key=secret["OPENAI_API_KEY"])
 
     try:
-        logger.info("Starting historical extract")
+        logger.info("Starting extract")
         raw_posts = extract_historical(
             SUBREDDITS,
             start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 25, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 27, tzinfo=timezone.utc),
         )
 
         logger.info("Deduplicating raw posts")
-        existing_post_ids = get_existing_ids(conn, "fact_posts", "id")
+        existing_post_ids = get_existing_ids(conn, "reddit_post", "post_id")
         raw_posts = deduplicate_raw_posts(raw_posts, existing_post_ids)
 
         logger.info("Starting transform")
@@ -58,15 +80,45 @@ def run_pipeline() -> None:
             required_columns=REQUIRED_COLUMNS,
         )
 
-        logger.info("Starting load")
-        load_main(
-            {
-                "fact_posts": fact_posts,
-                "dim_subreddits": dim_subreddits,
-            },
-            conn=conn,
+        fact_posts = fact_posts.rename(columns=FACT_POSTS_RENAME)
+
+        ticker_companies = get_ticker_companies(conn)
+        logger.info("Loaded %d tickers from stock table",
+                    len(ticker_companies))
+
+        logger.info("Starting analysis")
+        fact_post_tickers = analyse_posts(
+            fact_posts,
+            ticker_companies=ticker_companies,
+            client=openai_client,
         )
 
+        # Only keep posts that have at least one relevant ticker
+        matched_post_ids = set(fact_post_tickers["post_id"])
+        fact_posts = fact_posts[fact_posts["post_id"].isin(matched_post_ids)]
+        logger.info("Kept %d posts with relevant tickers", len(fact_posts))
+
+        logger.info("Starting load")
+
+        result = join_tables_to_json(
+            fact_posts, dim_subreddits, fact_post_tickers)
+
+        logger.info("Starting load")
+
+        stock_id_map = get_stock_id_map(conn)
+        story_stock = build_story_stock_df(fact_post_tickers, stock_id_map)
+
+        load_main(
+            {
+                "subreddit": dim_subreddits,
+                "reddit_post": fact_posts,
+                "reddit_analysis": story_stock,
+            },
+            conn=conn,
+            conflict_columns={
+                "subreddit": "subreddit_id",
+            },
+        )
         logger.info("Pipeline complete")
 
     finally:

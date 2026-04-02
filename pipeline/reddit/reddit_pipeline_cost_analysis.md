@@ -70,5 +70,6 @@ gpt-4o-mini pricing
     input: $0.15 per million tokens
     output: $0.60 per million tokens
 
-Max total cost: $1.52
-Avg total cost: $0.51
+Daily Reddit pipeline cost:
+Max: $1.52
+Avg: $0.51

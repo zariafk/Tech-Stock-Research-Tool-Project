@@ -207,6 +207,10 @@ def get_ticker_analysis(entry: dict, tickers: list[str], max_retries: int = 3) -
                 model='gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}]
             )
+            print("----------Prompt is:-----------")
+            print(prompt)
+            print("----------Result is:-----------")
+            print(response)
             return parse_relevance_data(response.choices[0].message.content)
         except RateLimitError as e:
             if attempt < max_retries - 1:

@@ -58,6 +58,9 @@ def fetch_feed(url: str) -> Optional[feedparser.FeedParserDict]:
     except requests.exceptions.RequestException as e:
         logger.error('LIVE: Request failed for %s: %s', url, e)
         return None
+    except Exception as e:
+        logger.error('LIVE: Unexpected error for %s: %s', url, e)
+        return None
 
     if response.status_code != 200:
         logger.error('LIVE: Failed: %s (Status: %s)',
@@ -115,7 +118,12 @@ def extract_live(feeds: dict) -> list[dict]:
         for entry in feed.entries:
             article = extract_entry_fields(entry, source)
 
-            # Remove deduplication by URL
+            # Skip articles older than the latest in RDS
+            if latest_date and article['published_date'] != 'N/A':
+                article_dt = pd.Timestamp(article['published_date'], tz='UTC')
+                if article_dt <= latest_date:
+                    continue
+
             articles.append(article)
 
     logger.info('LIVE: Extracted %d new live articles total', len(articles))

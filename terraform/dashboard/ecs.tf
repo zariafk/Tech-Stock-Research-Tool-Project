@@ -127,6 +127,10 @@ resource "aws_ecs_task_definition" "c22_stocksiphon_dashboard_task" {
       {
         name  = "SECRETS_REPO_NAME"
         value = var.secrets_repo_name
+      },
+      {
+        name  = "RAG_API_URL"
+        value = var.rag_api_url
       }
     ]
     logConfiguration = {
@@ -153,4 +157,3 @@ resource "aws_ecs_service" "c22_stocksiphon_dashboard_service" {
     assign_public_ip = true
   }
 }
-

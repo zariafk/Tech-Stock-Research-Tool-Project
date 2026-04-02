@@ -2,6 +2,7 @@
 
 import pandas as pd
 import pytest
+from unittest.mock import patch
 from rss_transform import (
     validate_dataframe,
     drop_incomplete_rows,
@@ -9,6 +10,7 @@ from rss_transform import (
     normalise_published_date,
     deduplicate,
     transform,
+    REQUIRED_COLUMNS,
 )
 
 
@@ -16,23 +18,33 @@ from rss_transform import (
 
 @pytest.fixture
 def valid_df():
-    """Minimal valid DataFrame matching the extract output schema."""
+    """Minimal valid DataFrame matching the current extract output schema."""
     return pd.DataFrame([
         {
             "ticker": "AAPL",
+            "article_id": "aapl-001",
             "title": "Apple hits record",
-            "link": "https://example.com/apple",
+            "url": "https://example.com/apple",
             "summary": "Apple shares rose today.",
             "published_date": "2026-03-24 10:00:00",
             "source": "Yahoo Finance",
+            "relevance_score": 0.95,
+            "sentiment": 0.8,
+            "confidence": "High",
+            "analysis": "Bullish outlook for Apple.",
         },
         {
             "ticker": "MSFT",
+            "article_id": "msft-001",
             "title": "Microsoft acquires startup",
-            "link": "https://example.com/msft",
+            "url": "https://example.com/msft",
             "summary": "Microsoft announced an acquisition.",
             "published_date": "2026-03-23 09:00:00",
             "source": "Reuters",
+            "relevance_score": 0.88,
+            "sentiment": 0.6,
+            "confidence": "Medium",
+            "analysis": "Positive acquisition signal.",
         },
     ])
 
@@ -49,6 +61,11 @@ def test_validate_dataframe_raises_on_missing_column(valid_df):
         validate_dataframe(df)
 
 
+def test_validate_dataframe_skips_empty():
+    empty_df = pd.DataFrame()
+    validate_dataframe(empty_df)
+
+
 # === drop_incomplete_rows ===
 
 def test_drop_incomplete_rows_removes_na(valid_df):
@@ -59,7 +76,7 @@ def test_drop_incomplete_rows_removes_na(valid_df):
 
 
 def test_drop_incomplete_rows_removes_na_string(valid_df):
-    valid_df.loc[1, "link"] = "N/A"
+    valid_df.loc[1, "url"] = "N/A"
     result = drop_incomplete_rows(valid_df)
     assert len(result) == 1
     assert result.iloc[0]["ticker"] == "AAPL"
@@ -94,56 +111,60 @@ def test_normalise_published_date_drops_unparseable(valid_df):
 
 # === deduplicate ===
 
-def test_deduplicate_removes_duplicate_ticker_link(valid_df):
+def test_deduplicate_removes_duplicate_article_id(valid_df):
     duplicate = valid_df.iloc[[0]].copy()
     df = pd.concat([valid_df, duplicate], ignore_index=True)
     result = deduplicate(df)
     assert len(result) == 2
 
 
-def test_deduplicate_keeps_different_tickers_same_link():
-    df = pd.DataFrame([
-        {"ticker": "AAPL", "link": "https://example.com/news"},
-        {"ticker": "MSFT", "link": "https://example.com/news"},
-    ])
-    result = deduplicate(df)
+def test_deduplicate_keeps_different_article_ids(valid_df):
+    result = deduplicate(valid_df)
     assert len(result) == 2
 
 
 # === transform (integration) ===
 
-def test_transform_returns_dataframe(valid_df):
+@patch("rss_transform.invoke_rag_ingest")
+def test_transform_returns_dataframe(mock_rag, valid_df):
     result = transform(valid_df)
     assert isinstance(result, pd.DataFrame)
 
 
-def test_transform_output_columns(valid_df):
+@patch("rss_transform.invoke_rag_ingest")
+def test_transform_output_columns(mock_rag, valid_df):
     result = transform(valid_df)
-    expected = ["ticker", "title", "link",
-                "summary", "published_date", "source"]
-    assert list(result.columns) == expected
+    assert list(result.columns) == REQUIRED_COLUMNS
 
 
-def test_transform_raises_on_missing_column(valid_df):
+@patch("rss_transform.invoke_rag_ingest")
+def test_transform_raises_on_missing_column(mock_rag, valid_df):
     df = valid_df.drop(columns=["source"])
     with pytest.raises(ValueError):
         transform(df)
 
 
-def test_transform_drops_na_rows(valid_df):
+@patch("rss_transform.invoke_rag_ingest")
+def test_transform_drops_na_rows(mock_rag, valid_df):
     valid_df.loc[0, "published_date"] = "N/A"
     result = transform(valid_df)
     assert len(result) == 1
 
 
-def test_transform_empty_after_cleaning():
+@patch("rss_transform.invoke_rag_ingest")
+def test_transform_empty_after_cleaning(mock_rag):
     df = pd.DataFrame([{
         "ticker": "AAPL",
+        "article_id": "aapl-bad",
         "title": "N/A",
-        "link": "N/A",
+        "url": "N/A",
         "summary": "N/A",
         "published_date": "N/A",
         "source": "Yahoo Finance",
+        "relevance_score": 0.0,
+        "sentiment": 0.0,
+        "confidence": "Low",
+        "analysis": "",
     }])
     result = transform(df)
     assert result.empty

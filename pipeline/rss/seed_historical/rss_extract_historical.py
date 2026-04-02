@@ -76,6 +76,12 @@ def get_hn_historical(company_name: str) -> list[dict]:
             company_name, e
         )
         return []
+    except Exception as e:
+        logger.error(
+            'HIST: Unexpected error during extraction for %s: %s',
+            company_name, e
+        )
+        return []
 
 
 def _extract_for_ticker(ticker_company_pair: tuple) -> list[dict]:

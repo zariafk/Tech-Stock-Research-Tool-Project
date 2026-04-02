@@ -5,7 +5,7 @@ COPILOT GUIDELINES:
 
 ## 1. Structural Constraints
 * **PEP 8**: Strict adherence required with 4-space indentation.
-* **Line Length**: Hard limit of 180 characters per line.
+* **Line Length**: Hard limit of 79 characters per line.
 * **Function Scope**: Maximum 20 lines per function; focus on a single task.
 * **No Nesting**: Never define functions inside other functions.
 * **Returns**: Functions must return exactly one data type.

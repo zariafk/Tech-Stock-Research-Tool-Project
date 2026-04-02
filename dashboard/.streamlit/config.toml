@@ -1,0 +1,5 @@
+[theme]
+base = "dark"
+
+backgroundColor = "#001020"
+textColor = "e2e8f0"

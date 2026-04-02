@@ -21,7 +21,7 @@ TIME_OPTIONS: dict[str, int | None] = {
     "3 Months":   90,
     "6 Months":   180,
     "1 Year":     365,
-    "All History (2024)": None,
+    "All History (From 2024)": None,
 }
 
 CONFIDENCE_EMOJI: dict[str, str] = {

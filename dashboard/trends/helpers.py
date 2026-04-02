@@ -18,7 +18,7 @@ TIME_OPTIONS: dict[str, int | None] = {
     "3 Months":   90,
     "6 Months":   180,
     "1 Year":     365,
-    "All History (2024)": None,
+    "All History (From 2024)": None,
 }
 
 PERIOD_SHORT_LABEL_MAP: dict[str, str] = {
@@ -26,7 +26,7 @@ PERIOD_SHORT_LABEL_MAP: dict[str, str] = {
     "3 Months":   "3M",
     "6 Months":   "6M",
     "1 Year":     "1Y",
-    "All History (2024)": "All",
+    "All History (From 2024)": "All",
 }
 
 LOCAL_SCOPE_OPTIONS: list[str] = ["All Tickers", "Top 10", "Bottom 10"]

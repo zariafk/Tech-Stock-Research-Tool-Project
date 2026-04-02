@@ -20,7 +20,7 @@ COPY trends/charts.py ./trends/
 COPY trends/dashboard.py ./trends/
 COPY trends/helpers.py ./trends/
 COPY trends/queries.py ./trends/
-COPY trends/returnVvolatility.py ./trends/
+
 
 # listen on port 8501 for Streamlit
 EXPOSE 8501

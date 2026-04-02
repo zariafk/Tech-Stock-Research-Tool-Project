@@ -101,7 +101,8 @@ def run_pipeline() -> None:
 
         if result:
             logger.info("Invoking RAG ingest with %d posts",
-                        len(result["rag_dict"]))
+                        len(result))
+            # This is a list not a dict
             invoke_rag_ingest(source="reddit", data=result["rag_dict"])
         logger.info("RAG ingest invoked successfully")
 

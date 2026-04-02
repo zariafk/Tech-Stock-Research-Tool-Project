@@ -317,7 +317,7 @@ def dashboard():
         )
 
     st.caption(
-        "_Dashboard updated with live data from RDS. Refresh to see latest signals._"
+        "_Dashboard updated with live data. Refresh to see latest signals._"
     )
 
 

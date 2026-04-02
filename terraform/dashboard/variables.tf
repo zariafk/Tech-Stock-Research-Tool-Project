@@ -23,9 +23,3 @@ variable "secrets_repo_name" {
   type        = string
   sensitive   = true
 }
-
-variable "rag_api_url" {
-  description = "Name of the AWS Secrets Manager secret containing database credentials"
-  type        = string
-  sensitive   = true
-}

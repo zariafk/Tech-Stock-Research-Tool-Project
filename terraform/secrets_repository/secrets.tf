@@ -8,6 +8,6 @@ terraform {
 }
 
 resource "aws_secretsmanager_secret" "reddit_pipeline" {
-  name        = "reddit-pipeline/s3-credentials"
+  name        = "c22-trade-research-tool-secrets"
   description = "S3 credentials and bucket name for the Reddit ETL pipeline"
 }

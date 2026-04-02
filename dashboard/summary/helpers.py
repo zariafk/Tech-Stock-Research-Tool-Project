@@ -344,8 +344,8 @@ def render_social_section(social: pd.DataFrame) -> None:
         with st.popover("ℹ️"):
             st.markdown(
                 "**Top Discussions**\n\n"
-                "The most active Reddit posts mentioning this stock, "
-                "ranked by engagement.\n\n"
+                "The most recent Reddit posts mentioning this stock, "
+                "sorted by most recent first.\n\n"
                 "- **Sentiment icon** — 🟢 positive, 🟡 neutral, 🔴 negative.\n"
                 "- **Upvotes** — community endorsement count.\n"
                 "- **Expand** a card to see post date, comment count, "

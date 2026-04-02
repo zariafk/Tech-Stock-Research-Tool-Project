@@ -37,11 +37,11 @@ All credentials are stored in **AWS Secrets Manager** under `c22-trade-research-
 |---|---|
 | `ALPACA_API_KEY` | Alpaca API key ID |
 | `ALPACA_API_SECRET` | Alpaca API secret key |
-| `host` | RDS endpoint |
-| `port` | RDS port (default `5432`) |
-| `dbname` | Database name |
-| `username` | Database user |
-| `password` | Database password |
+| `DB_HOST` | RDS endpoint |
+| `DB_PORT` | RDS port (default `5432`) |
+| `DB_NAME` | Database name |
+| `DB_USER` | Database user |
+| `DB_PASSWORD` | Database password |
 
 ### Dependencies
 

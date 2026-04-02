@@ -31,14 +31,14 @@ def dashboard():
     tab_market, tab_ticker = st.tabs(
         ["Market Data", "Search Company"])
 
-    render_chatbot()  # Render chatbot in the background so it's available across tabs
-
     # ── Tab 1: Market Data ──────────────────────────────────────────────────────────────
     with tab_market:
         trends_dashboard()
     # ── Tab 2: Specific company ──────────────────────────────────────────────────────────────
     with tab_ticker:
         summary_dashboard()
+
+    render_chatbot()
 
 
 if __name__ == "__main__":

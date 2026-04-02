@@ -68,10 +68,7 @@ if "conn" not in st.session_state:
 if st.session_state.conn is None:
     try:
         st.session_state.conn = get_connection()
-        st.sidebar.success("Connected to RDS ✓")
     except Exception as e:
-        st.sidebar.error("Could not connect to database.")
-        st.sidebar.caption(str(e))
         raise RuntimeError("Database connection failed")
 
 conn = st.session_state.conn

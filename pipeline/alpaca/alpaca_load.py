@@ -26,9 +26,9 @@ def get_rds_connection():
     secrets = get_secret()
 
     connection = psycopg2.connect(
-        host=secrets["host"], port=secrets.get("port", "5432"),
-        dbname=secrets["dbname"], user=secrets["username"],
-        password=secrets["password"],
+        host=secrets["DB_HOST"], port=secrets.get("DB_PORT", "5432"),
+        dbname=secrets["DB_NAME"], user=secrets["DB_USER"],
+        password=secrets["DB_PASSWORD"],
         sslmode="verify-full", sslrootcert=SSL_CERT_PATH)
 
     return connection

@@ -13,6 +13,6 @@ COPY top_100_tech_companies.py ${LAMBDA_TASK_ROOT}/
 COPY logger.py ${LAMBDA_TASK_ROOT}/
 COPY rag_ingest_invoke.py ${LAMBDA_TASK_ROOT}/
 
-COPY global-bundle.pem ${LAMBDA_TASK_ROOT}/
+RUN curl -o ${LAMBDA_TASK_ROOT}/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
 CMD ["run_pipeline.lambda_handler"]

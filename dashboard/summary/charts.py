@@ -8,9 +8,8 @@ import pandas as pd
 import altair as alt
 
 
-# ---------------------------------------------------------------------------
 #  Shared chart constants
-# ---------------------------------------------------------------------------
+
 SENTIMENT_DOMAIN = [-1.2, 1.2]
 SENTIMENT_COLOUR_DOMAIN = [-1, 1]
 SENTIMENT_COLOUR_SCHEME = "redyellowgreen"
@@ -32,11 +31,19 @@ MIDLINE_WIDTH = 1.5
 AREA_OPACITY = 0.45
 DEFAULT_LINE_COLOUR = "#4A90D9"
 TICKER_COLOURS = ["#4A90D9", "#2ecc71"]
+INDICATOR_POS_THRESHOLD = 0.1
+INDICATOR_NEG_THRESHOLD = -0.1
+MARKET_POS_THRESHOLD = 0.01
+MARKET_NEG_THRESHOLD = -0.01
+SIGNAL_DOMAIN = ["positive", "neutral", "negative"]
+SIGNAL_COLORS = [POSITIVE_AREA_COLOUR, "#f39c12", NEGATIVE_AREA_COLOUR]
+SIGNAL_SORT_ORDER = ["News", "Reddit", "Market"]
+INDICATOR_CIRCLE_SIZE = 2000
+INDICATOR_ROW_HEIGHT = 120
 
 
-# ---------------------------------------------------------------------------
 #  Shared chart helpers
-# ---------------------------------------------------------------------------
+
 def _is_multi_ticker(dataframe: pd.DataFrame) -> bool:
     """Check whether a dataframe contains more than one ticker."""
     return "ticker" in dataframe.columns and dataframe["ticker"].nunique() > 1
@@ -92,9 +99,7 @@ def _ticker_colour_encoding() -> alt.Color:
     )
 
 
-# ---------------------------------------------------------------------------
 #  Comments vs Sentiment
-# ---------------------------------------------------------------------------
 def _comments_colour_encoding(multi_ticker: bool) -> alt.Color:
     """Colour by ticker in comparison mode, by relevance otherwise."""
     if multi_ticker:
@@ -129,7 +134,8 @@ def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | 
 
     scatter = (
         alt.Chart(social)
-        .mark_circle(opacity=CHART_CIRCLE_OPACITY, stroke=CHART_CIRCLE_STROKE, strokeWidth=CHART_CIRCLE_STROKE_WIDTH)
+        .mark_circle(opacity=CHART_CIRCLE_OPACITY, stroke=CHART_CIRCLE_STROKE,
+                     strokeWidth=CHART_CIRCLE_STROKE_WIDTH)
         .encode(
             x=_sentiment_x_axis(),
             y=alt.Y("num_comments:Q", title="Comments"),
@@ -143,9 +149,7 @@ def build_comments_vs_sentiment_chart(social: pd.DataFrame) -> alt.LayerChart | 
     return _vertical_zero_rule() + scatter
 
 
-# ---------------------------------------------------------------------------
 #  Signal Convergence (Price x Reddit Sentiment)
-# ---------------------------------------------------------------------------
 def _merge_social_with_prices(
     social: pd.DataFrame,
     history: pd.DataFrame,
@@ -249,9 +253,8 @@ def build_signal_convergence_chart(
     return chart, social_merged
 
 
-# ---------------------------------------------------------------------------
 #  Sentiment Momentum (rolling 7-day)
-# ---------------------------------------------------------------------------
+
 def _aggregate_daily_sentiment(social: pd.DataFrame, multi_ticker: bool) -> pd.DataFrame:
     """Group by date (and ticker) to compute daily weighted sentiment."""
     group_columns = ["ticker", "date"] if multi_ticker else ["date"]
@@ -368,9 +371,7 @@ def build_sentiment_momentum_chart(social: pd.DataFrame) -> alt.Chart | None:
     return (area_chart + zero_rule).properties(height=220)
 
 
-# ---------------------------------------------------------------------------
 #  Engagement Scatter (Upvotes vs Sentiment)
-# ---------------------------------------------------------------------------
 def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | None:
     """Builds scatter plot of upvotes vs sentiment, sized by comment count."""
     if social.empty:
@@ -378,7 +379,8 @@ def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | Non
 
     scatter = (
         alt.Chart(social)
-        .mark_circle(opacity=CHART_CIRCLE_OPACITY, stroke=CHART_CIRCLE_STROKE, strokeWidth=CHART_CIRCLE_STROKE_WIDTH)
+        .mark_circle(opacity=CHART_CIRCLE_OPACITY, stroke=CHART_CIRCLE_STROKE,
+                     strokeWidth=CHART_CIRCLE_STROKE_WIDTH)
         .encode(
             x=_sentiment_x_axis(),
             y=alt.Y("ups:Q", title="Upvotes"),
@@ -401,20 +403,6 @@ def build_engagement_scatter_chart(social: pd.DataFrame) -> alt.LayerChart | Non
     )
 
     return (_vertical_zero_rule() + scatter).properties(height=300)
-
-
-# ---------------------------------------------------------------------------
-#  Sentiment Indicator Row (Sources Overview)
-# ---------------------------------------------------------------------------
-INDICATOR_POS_THRESHOLD = 0.1
-INDICATOR_NEG_THRESHOLD = -0.1
-MARKET_POS_THRESHOLD = 0.01
-MARKET_NEG_THRESHOLD = -0.01
-SIGNAL_DOMAIN = ["positive", "neutral", "negative"]
-SIGNAL_COLORS = [POSITIVE_AREA_COLOUR, "#f39c12", NEGATIVE_AREA_COLOUR]
-SIGNAL_SORT_ORDER = ["News", "Reddit", "Market"]
-INDICATOR_CIRCLE_SIZE = 2000
-INDICATOR_ROW_HEIGHT = 120
 
 
 def _classify_signal(score: float) -> str:
@@ -446,7 +434,8 @@ def _weighted_average_score(dataframe: pd.DataFrame) -> float:
 
 
 def _market_price_change(history: pd.DataFrame) -> float:
-    """Returns fractional price change from first to last close. Returns 0.0 if insufficient data."""
+    """Returns fractional price change from first to last close.
+     Returns 0.0 if insufficient data."""
     if history.empty or len(history) < 2:
         return 0.0
     sorted_history = history.sort_values("bar_date")

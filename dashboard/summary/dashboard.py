@@ -8,6 +8,7 @@ import json
 import os
 
 import boto3
+import botocore.exceptions
 import pandas as pd
 import psycopg2
 import streamlit as st
@@ -73,20 +74,22 @@ def get_connection():
 if "conn" not in st.session_state:
     st.session_state.conn = None
 
-if st.session_state.conn is None:
     try:
         st.session_state.conn = get_connection()
         st.sidebar.success("Connected to RDS ✓")
-    except Exception as e:
+    except (
+        psycopg2.OperationalError,
+        botocore.exceptions.ClientError,
+    ) as e:
         st.sidebar.error("Could not connect to database.")
+        st.sidebar.caption(str(e))
         st.sidebar.caption(str(e))
 
 conn = st.session_state.conn
 
 
-# ---------------------------------------------------------------------------
 # Cached queries (20-minute TTL)
-# ---------------------------------------------------------------------------
+
 @st.cache_data(ttl=1200, show_spinner="Searching for stock...")
 def fetch_stock_by_ticker_or_name(_conn, search_term: str) -> tuple | None:
     """Search for stock by ticker or name. Returns (stock_id, ticker, stock_name) or None."""
@@ -178,9 +181,8 @@ def combine_ticker_data(
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-# ---------------------------------------------------------------------------
 # Dashboard
-# ---------------------------------------------------------------------------
+
 
 def dashboard():
     """Render the full summary dashboard for a user-searched stock."""

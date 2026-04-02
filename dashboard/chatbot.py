@@ -1,3 +1,5 @@
+"""Chatbot sidebar component for StockSiphon dashboard."""
+
 import os
 import html
 import requests
@@ -90,6 +92,8 @@ def render_floating_sidebar_button():
 
 
 def render_chatbot():
+    """Render the chatbot sidebar with chat history and input form."""
+
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
             {

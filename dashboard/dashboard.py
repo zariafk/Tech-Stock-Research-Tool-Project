@@ -1,3 +1,5 @@
+"""Dashboard for Tech Stock Research Tool."""
+
 import streamlit as st
 from trends.dashboard import dashboard as trends_dashboard
 from summary.dashboard import dashboard as summary_dashboard
@@ -5,18 +7,14 @@ from chatbot import render_chatbot
 
 
 def dashboard():
+    """Main dashboard function to render the Streamlit app."""
 
-    # ---------------------------------------------------------------------------
-    # Page config
-    # ---------------------------------------------------------------------------
     st.set_page_config(
         page_title="Tech Stock Research",
         page_icon="📈",
         layout="wide",
     )
-    # ---------------------------------------------------------------------------
-    # App branding with logo
-    # ---------------------------------------------------------------------------
+
     st.warning(
         "⚠️  Disclaimer: This tool is not financial advice")
     col_logo, col_title = st.columns([1, 10])
@@ -25,16 +23,15 @@ def dashboard():
     with col_title:
         st.title("Stock Siphon Tool")
         st.caption("Chaos in, Clarity out")
-    # ---------------------------------------------------------------------------
+
     # Tabs
-    # ---------------------------------------------------------------------------
     tab_market, tab_ticker = st.tabs(
         ["Market Data", "Search Company"])
 
-    # ── Tab 1: Market Data ──────────────────────────────────────────────────────────────
+    # Tab 1: Market Data
     with tab_market:
         trends_dashboard()
-    # ── Tab 2: Specific company ──────────────────────────────────────────────────────────────
+    # Tab 2: Specific company
     with tab_ticker:
         summary_dashboard()
 

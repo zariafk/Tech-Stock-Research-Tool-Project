@@ -74,6 +74,7 @@ def get_connection():
 if "conn" not in st.session_state:
     st.session_state.conn = None
 
+if st.session_state.conn is None or st.session_state.conn.closed != 0:
     try:
         st.session_state.conn = get_connection()
         st.sidebar.success("Connected to RDS ✓")

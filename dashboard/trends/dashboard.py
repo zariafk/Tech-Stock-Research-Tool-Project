@@ -65,11 +65,12 @@ def get_connection():
 if "conn" not in st.session_state:
     st.session_state.conn = None
 
-if st.session_state.conn is None:
+if st.session_state.conn is None or st.session_state.conn.closed != 0:
     try:
         st.session_state.conn = get_connection()
     except Exception as e:
-        raise RuntimeError("Database connection failed")
+        st.sidebar.error("Could not connect to database.")
+        st.sidebar.caption(str(e))
 
 conn = st.session_state.conn
 

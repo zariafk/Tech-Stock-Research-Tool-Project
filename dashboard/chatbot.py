@@ -104,7 +104,8 @@ def render_chatbot():
                     "Use the _'Market Data'_ tab for an overview of tech stock performance at the moment 📊\n\n"
                     "Use the _'Search Company'_ tab to search for a specific stock and get a summary of its recent news and performance 📈\n\n"
                     "Finally, use me to ask any specific questions you have about tech stocks and information shown and I'll do my best to help! 😄\n\n"
-                    "P.S. I can't provide financial advice 😳 Always do your own research before making any investment decisions!"
+                    "P.S. I can't provide financial advice 😳 Always do your own research before making any investment decisions!\n\n"
+                    "User queries may be processed by third-parties but are not stored in our own system."
                 ),
             }
         ]
